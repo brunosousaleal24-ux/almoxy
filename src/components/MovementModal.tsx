@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useInventory } from '../context/InventoryContext';
+import { useAuth } from '../context/AuthContext';
 import { Product, MovementType, MovementReason } from '../types';
 import { formatCurrency } from '../utils/exportUtils';
 
@@ -33,6 +34,7 @@ export const MovementModal: React.FC<MovementModalProps> = ({
   initialType = 'ENTRADA',
 }) => {
   const { products, registerMovement } = useInventory();
+  const { currentUser, userProfile } = useAuth();
 
   const [type, setType] = useState<MovementType>(initialType);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -40,8 +42,11 @@ export const MovementModal: React.FC<MovementModalProps> = ({
   const [quantity, setQuantity] = useState<number | ''>(1);
   const [reason, setReason] = useState<MovementReason>('COMPRA_NF');
   const [documentNumber, setDocumentNumber] = useState<string>('');
-  const [requesterSector, setRequesterSector] = useState<string>('Obra / Produção');
-  const [operatorName, setOperatorName] = useState<string>('Carlos Borges');
+  const [requesterSector, setRequesterSector] = useState<string>('Produção / Campo');
+  const [operatorName, setOperatorName] = useState<string>(
+    userProfile?.displayName || currentUser?.displayName || 'Almoxarife'
+  );
+  const [employeeName, setEmployeeName] = useState<string>('');
   const [unitCost, setUnitCost] = useState<number | ''>('');
   const [notes, setNotes] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,6 +54,9 @@ export const MovementModal: React.FC<MovementModalProps> = ({
   // Sync initial product and initial type when modal opens
   useEffect(() => {
     if (isOpen) {
+      if (currentUser?.displayName || userProfile?.displayName) {
+        setOperatorName(userProfile?.displayName || currentUser?.displayName || 'Almoxarife');
+      }
       if (initialProduct) {
         setSelectedProductId(initialProduct.id);
         setProductSearch(initialProduct.name);
@@ -57,11 +65,16 @@ export const MovementModal: React.FC<MovementModalProps> = ({
         setSelectedProductId(products[0].id);
         setProductSearch('');
         setUnitCost(products[0].costPrice);
+      } else {
+        setSelectedProductId('');
+        setProductSearch('');
+        setUnitCost('');
       }
       setType(initialType);
       setReason(initialType === 'ENTRADA' ? 'COMPRA_NF' : initialType === 'SAIDA' ? 'REQUISICAO_SETOR' : 'INVENTARIO_CORRECAO');
       setQuantity(1);
       setDocumentNumber('');
+      setEmployeeName('');
       setNotes('');
       setErrorMessage(null);
     }
@@ -77,7 +90,7 @@ export const MovementModal: React.FC<MovementModalProps> = ({
       setRequesterSector('Compras / Almoxarifado');
     } else if (newType === 'SAIDA') {
       setReason('REQUISICAO_SETOR');
-      setRequesterSector('Obra / Produção');
+      setRequesterSector('Produção / Campo');
     } else if (newType === 'AJUSTE') {
       setReason('INVENTARIO_CORRECAO');
       setRequesterSector('Auditoria de Estoque');
@@ -93,6 +106,68 @@ export const MovementModal: React.FC<MovementModalProps> = ({
     setUnitCost(prod.costPrice);
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!selectedProductId) {
+      setErrorMessage('Por favor, selecione um item do almoxarifado.');
+      return;
+    }
+
+    if (!quantity || Number(quantity) <= 0) {
+      setErrorMessage('A quantidade deve ser superior a zero.');
+      return;
+    }
+
+    const numQty = Number(quantity);
+
+    // Validate Stock Out
+    if (type === 'SAIDA' && selectedProduct) {
+      if (selectedProduct.currentStock < numQty) {
+        setErrorMessage(
+          `Saldo insuficiente. Disponível no momento: ${selectedProduct.currentStock} ${selectedProduct.unit}.`
+        );
+        return;
+      }
+    }
+
+    const effectiveUnitCost =
+      unitCost !== '' ? Number(unitCost) : selectedProduct ? selectedProduct.costPrice : 0;
+
+    const res = registerMovement({
+      productId: selectedProductId,
+      type,
+      quantity: numQty,
+      unitCost: effectiveUnitCost,
+      reason,
+      documentNumber: documentNumber.trim() || undefined,
+      requesterSector: requesterSector.trim() || undefined,
+      operatorName: operatorName.trim() || 'Almoxarife',
+      employeeName: employeeName.trim() || undefined,
+      notes: notes.trim() || undefined,
+    });
+
+    if (res) {
+      // Trigger celebration for successful movements
+      try {
+        confetti({
+          particleCount: 40,
+          spread: 60,
+          origin: { y: 0.8 },
+          colors: ['#D4AF37', '#10B981', '#F59E0B'],
+        });
+      } catch (err) {
+        // ignore in iframe
+      }
+
+      onClose();
+    } else {
+      setErrorMessage('Ocorreu um erro ao processar a movimentação no estoque.');
+    }
+  };
+
+  // Filtered products for search
   const filteredProducts = products.filter(
     (p) =>
       p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
@@ -100,411 +175,339 @@ export const MovementModal: React.FC<MovementModalProps> = ({
       p.barcode.includes(productSearch)
   );
 
-  // Compute resulting stock preview
-  const numQty = typeof quantity === 'number' ? quantity : 0;
-  const currentStock = selectedProduct ? selectedProduct.currentStock : 0;
-  let resultingStock = currentStock;
-  if (type === 'ENTRADA') resultingStock = currentStock + numQty;
-  else if (type === 'SAIDA') resultingStock = currentStock - numQty;
-  else if (type === 'AJUSTE') resultingStock = numQty;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!selectedProductId) {
-      setErrorMessage('Selecione um produto do catálogo.');
-      return;
-    }
-
-    if (quantity === '' || quantity <= 0) {
-      setErrorMessage('Informe uma quantidade válida maior que zero.');
-      return;
-    }
-
-    if (type === 'SAIDA' && currentStock < numQty) {
-      setErrorMessage(
-        `Saldo insuficiente em estoque! Disponível: ${currentStock} ${selectedProduct?.unit}, Solicitado: ${numQty}.`
-      );
-      return;
-    }
-
-    const result = registerMovement({
-      productId: selectedProductId,
-      type,
-      reason,
-      quantity: Number(quantity),
-      documentNumber,
-      requesterSector,
-      operatorName,
-      notes,
-      unitCost: typeof unitCost === 'number' ? unitCost : undefined,
-    });
-
-    if (result.success) {
-      try {
-        confetti({
-          particleCount: 40,
-          spread: 60,
-          origin: { y: 0.7 },
-        });
-      } catch {
-        // Safe fallback
-      }
-      onClose();
-    } else {
-      setErrorMessage(result.error || 'Erro ao registrar movimentação.');
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="relative w-full max-w-2xl bg-white dark:bg-[#16191D] border border-slate-200 dark:border-[#2C333E] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          transition={{ duration: 0.2 }}
+          className="bg-white dark:bg-[#16191E] border border-slate-200 dark:border-[#2C333E] rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[92vh]"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-[#262B33] bg-slate-50 dark:bg-[#121519]">
-            <div className="flex items-center gap-3">
+          {/* Modal Header */}
+          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-[#262B33]">
+            <div className="flex items-center gap-2.5">
               <div
-                className={`p-2.5 rounded-xl border ${
+                className={`p-2 rounded-xl text-white ${
                   type === 'ENTRADA'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-emerald-600'
                     : type === 'SAIDA'
-                    ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    ? 'bg-amber-600'
+                    : 'bg-blue-600'
                 }`}
               >
-                {type === 'ENTRADA' && <ArrowDownRight className="w-5 h-5" />}
-                {type === 'SAIDA' && <ArrowUpRight className="w-5 h-5" />}
-                {type === 'AJUSTE' && <Sliders className="w-5 h-5" />}
-                {type === 'TRANSFERENCIA' && <RefreshCw className="w-5 h-5" />}
+                {type === 'ENTRADA' ? (
+                  <ArrowDownRight className="w-5 h-5" />
+                ) : type === 'SAIDA' ? (
+                  <ArrowUpRight className="w-5 h-5" />
+                ) : (
+                  <Sliders className="w-5 h-5" />
+                )}
               </div>
               <div>
-                <h3 className="font-serif font-bold text-lg text-slate-900 dark:text-[#F9FAFB]">
-                  Registrar Movimentação de Estoque
+                <h3 className="text-lg font-serif font-bold text-slate-900 dark:text-[#F9FAFB]">
+                  {type === 'ENTRADA' && 'Lançar Entrada / Compra (NF)'}
+                  {type === 'SAIDA' && 'Lançar Saída / Requisição de Obra'}
+                  {type === 'AJUSTE' && 'Ajuste de Inventário / Correção'}
+                  {type === 'TRANSFERENCIA' && 'Transferência de Galpão'}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-sans">
-                  Borges & Gomes Almoxarifado • Controle com Rastreabilidade
+                  Atualização imediata de saldos contábeis e rastreabilidade por operador.
                 </p>
               </div>
             </div>
+
             <button
-              id="btn-close-movement-modal"
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-[#20252D] transition"
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-[#20252D] transition"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Form Body */}
-          <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto font-sans">
+          {/* Type Selector Tabs */}
+          <div className="grid grid-cols-4 border-b border-slate-200 dark:border-[#262B33] bg-slate-50/50 dark:bg-[#111317] text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => handleTypeChange('ENTRADA')}
+              className={`py-3 px-2 flex items-center justify-center gap-1.5 border-b-2 transition ${
+                type === 'ENTRADA'
+                  ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16191E]'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <ArrowDownRight className="w-4 h-4" />
+              <span>Entrada</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTypeChange('SAIDA')}
+              className={`py-3 px-2 flex items-center justify-center gap-1.5 border-b-2 transition ${
+                type === 'SAIDA'
+                  ? 'border-amber-600 text-amber-700 dark:text-amber-400 bg-white dark:bg-[#16191E]'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              <span>Saída</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTypeChange('AJUSTE')}
+              className={`py-3 px-2 flex items-center justify-center gap-1.5 border-b-2 transition ${
+                type === 'AJUSTE'
+                  ? 'border-blue-600 text-blue-700 dark:text-blue-400 bg-white dark:bg-[#16191E]'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              <span>Ajuste</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTypeChange('TRANSFERENCIA')}
+              className={`py-3 px-2 flex items-center justify-center gap-1.5 border-b-2 transition ${
+                type === 'TRANSFERENCIA'
+                  ? 'border-purple-600 text-purple-700 dark:text-purple-400 bg-white dark:bg-[#16191E]'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Transf.</span>
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto font-sans text-xs">
             {errorMessage && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-2 text-xs text-red-700 dark:text-red-300">
+              <div className="p-3 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* Movement Type Selector Tabs */}
-            <div className="grid grid-cols-4 gap-2 p-1 bg-slate-100 dark:bg-[#1C2128] rounded-xl border border-slate-200/50 dark:border-[#2A303A]">
-              <button
-                type="button"
-                id="tab-mov-entrada"
-                onClick={() => handleTypeChange('ENTRADA')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  type === 'ENTRADA'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <ArrowDownRight className="w-4 h-4" />
-                Entrada
-              </button>
-              <button
-                type="button"
-                id="tab-mov-saida"
-                onClick={() => handleTypeChange('SAIDA')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  type === 'SAIDA'
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <ArrowUpRight className="w-4 h-4" />
-                Saída
-              </button>
-              <button
-                type="button"
-                id="tab-mov-ajuste"
-                onClick={() => handleTypeChange('AJUSTE')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  type === 'AJUSTE'
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Sliders className="w-4 h-4" />
-                Ajuste
-              </button>
-              <button
-                type="button"
-                id="tab-mov-transf"
-                onClick={() => handleTypeChange('TRANSFERENCIA')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
-                  type === 'TRANSFERENCIA'
-                    ? 'bg-slate-700 text-amber-300 border border-amber-500/40 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <RefreshCw className="w-4 h-4" />
-                Transf.
-              </button>
-            </div>
-
-            {/* Product Selection */}
+            {/* Product Selector */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 font-sans">
-                Produto do Almoxarifado *
+              <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                Item do Almoxarifado *
               </label>
-              <div className="relative">
-                <Package className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Digite nome, SKU ou código de barras para filtrar..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60 font-sans"
-                />
+
+              {products.length === 0 ? (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-xl text-amber-800 dark:text-amber-300 text-xs">
+                  Nenhum produto cadastrado no momento. Cadastre itens no Catálogo primeiro para poder movimentar.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar por nome, código SKU ou código de barras..."
+                    value={productSearch}
+                    onChange={(e) => {
+                      setProductSearch(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500"
+                  />
+
+                  {/* Quick Product Pick List */}
+                  <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-[#2C333E] rounded-xl divide-y divide-slate-100 dark:divide-[#262B33] bg-white dark:bg-[#16191E]">
+                    {filteredProducts.length === 0 ? (
+                      <div className="p-3 text-center text-slate-400">Nenhum item encontrado</div>
+                    ) : (
+                      filteredProducts.map((p) => {
+                        const isSelected = p.id === selectedProductId;
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => handleProductSelect(p)}
+                            className={`p-2.5 flex items-center justify-between cursor-pointer transition ${
+                              isSelected
+                                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
+                                : 'hover:bg-slate-50 dark:hover:bg-[#1F242C]'
+                            }`}
+                          >
+                            <div>
+                              <div className="font-serif font-bold text-slate-900 dark:text-white">
+                                {p.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                                SKU: {p.sku} | Local: {p.location.shelf}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                                  p.currentStock === 0
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                }`}
+                              >
+                                Saldo: {p.currentStock} {p.unit}
+                              </span>
+                              <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                {formatCurrency(p.costPrice)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quantity and Unit Cost */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Quantidade Movimentada *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    required
+                    value={quantity}
+                    onChange={(e) =>
+                      setQuantity(e.target.value === '' ? '' : Number(e.target.value))
+                    }
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                  />
+                  {selectedProduct && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-[11px]">
+                      {selectedProduct.unit}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Quick product dropdown / picker */}
-              <div className="max-h-32 overflow-y-auto border border-slate-200 dark:border-[#2A303A] rounded-xl p-1 divide-y divide-slate-100 dark:divide-[#21262E] bg-white dark:bg-[#14171B]">
-                {filteredProducts.map((p) => (
-                  <button
-                    type="button"
-                    key={p.id}
-                    onClick={() => handleProductSelect(p)}
-                    className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between rounded-lg transition ${
-                      selectedProductId === p.id
-                        ? 'bg-amber-500/20 text-amber-300 font-medium'
-                        : 'hover:bg-slate-50 dark:hover:bg-[#1E232B] text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-bold mr-1.5 font-mono text-amber-600 dark:text-amber-400">[{p.sku}]</span>
-                      <span className="font-serif">{p.name}</span>
-                    </div>
-                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                      Saldo: <strong>{p.currentStock} {p.unit}</strong>
-                    </span>
-                  </button>
-                ))}
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Custo Unitário (R$)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono">
+                    R$
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={unitCost}
+                    onChange={(e) =>
+                      setUnitCost(e.target.value === '' ? '' : Number(e.target.value))
+                    }
+                    className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Live Stock Transition Banner */}
-            {selectedProduct && (
-              <div className="p-3 bg-slate-50 dark:bg-[#14171A] border border-slate-200 dark:border-[#282E37] rounded-xl flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 text-[11px]">Estoque Atual:</span>
-                  <p className="text-xs font-mono font-bold text-slate-800 dark:text-white">
-                    {currentProductStockText(selectedProduct)}
-                  </p>
-                </div>
-                <div className="text-center font-bold text-amber-500">→</div>
-                <div className="text-right">
-                  <span className="text-slate-500 dark:text-slate-400 text-[11px]">
-                    {type === 'AJUSTE' ? 'Nova Contagem Física:' : 'Saldo Resultante:'}
-                  </span>
-                  <p
-                    className={`text-xs font-mono font-bold ${
-                      resultingStock <= selectedProduct.minStock
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-emerald-600 dark:text-emerald-400'
-                    }`}
-                  >
-                    {resultingStock} {selectedProduct.unit}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Quantity and Cost Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Motivo & Documento */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {type === 'AJUSTE' ? 'Nova Quantidade Contada *' : 'Quantidade *'}
-                </label>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="any"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value === '' ? '' : Number(e.target.value))}
-                  required
-                  placeholder="Ex: 5"
-                  className="w-full px-3 py-2 text-xs sm:text-sm font-mono bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Motivo / Finalidade *
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Motivo da Movimentação
                 </label>
                 <select
                   value={reason}
                   onChange={(e) => setReason(e.target.value as MovementReason)}
-                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
                 >
-                  {type === 'ENTRADA' && (
-                    <>
-                      <option value="COMPRA_NF">Compra c/ Nota Fiscal</option>
-                      <option value="DEVOLUCAO">Devolução de Material</option>
-                      <option value="SALDO_INICIAL">Saldo Inicial de Catálogo</option>
-                      <option value="PRODUCAO">Entrada de Fabricação</option>
-                    </>
-                  )}
-                  {type === 'SAIDA' && (
-                    <>
-                      <option value="REQUISICAO_SETOR">Requisição de Setor/Obra</option>
-                      <option value="CONSUMO_INTERNO">Consumo Interno</option>
-                      <option value="MANUTENCAO">Manutenção Preventiva/Corretiva</option>
-                      <option value="OBRA_SERVICO">Obra / Prestação de Serviço</option>
-                      <option value="PERDA_AVARIA">Avaria / Quebra / Perda</option>
-                      <option value="DESCARTE">Descarte / Sucata</option>
-                    </>
-                  )}
-                  {type === 'AJUSTE' && (
-                    <>
-                      <option value="INVENTARIO_CORRECAO">Contagem Rotativa / Inventário</option>
-                      <option value="PERDA_AVARIA">Ajuste por Avaria</option>
-                    </>
-                  )}
-                  {type === 'TRANSFERENCIA' && (
-                    <>
-                      <option value="TRANSFERENCIA_LOCAL">Transferência entre Galpões</option>
-                      <option value="REQUISICAO_SETOR">Transferência p/ Canteiro de Obras</option>
-                    </>
-                  )}
+                  <option value="COMPRA_NF">Compra com Nota Fiscal</option>
+                  <option value="REQUISICAO_SETOR">Requisição de Obra / Setor</option>
+                  <option value="DEVOLUCAO_OBRA">Devolução de Material / Sobra</option>
+                  <option value="INVENTARIO_CORRECAO">Ajuste de Inventário / Balanço</option>
+                  <option value="PERDA_AVARIA">Avaria / Perda / Vencimento</option>
+                  <option value="TRANSFERENCIA_LOCAL">Transferência entre Galpões</option>
+                  <option value="OUTRO">Outro Motivo</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Custo Unit. (R$)
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={unitCost}
-                    onChange={(e) => setUnitCost(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="0.00"
-                    className="w-full pl-7 pr-3 py-2 text-xs sm:text-sm font-mono bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Document and Requester */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Nº Documento / NF / Ordem de Serviço
-                </label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={documentNumber}
-                    onChange={(e) => setDocumentNumber(e.target.value)}
-                    placeholder="Ex: NF-99412 ou OS-2026/45"
-                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Setor Requisitante / Destino
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={requesterSector}
-                    onChange={(e) => setRequesterSector(e.target.value)}
-                    placeholder="Ex: Obra Alpha, Elétrica, Mecânica..."
-                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Operator and Notes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Operador / Responsável *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={operatorName}
-                    onChange={(e) => setOperatorName(e.target.value)}
-                    required
-                    placeholder="Nome do almoxarife"
-                    className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Observações Adicionais
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Nº da NF / Ordem de Serviço
                 </label>
                 <input
                   type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ex: Lote conferido, item de reposição urgente..."
-                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60"
+                  placeholder="Ex: NF-10492 ou OS-884"
+                  value={documentNumber}
+                  onChange={(e) => setDocumentNumber(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
 
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-[#262B33]">
+            {/* Setor Requisitante & Colaborador */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Setor Solicitante
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Elétrica / Hidráulica / Obra 01"
+                  value={requesterSector}
+                  onChange={(e) => setRequesterSector(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Colaborador / Retirado por
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nome do profissional que retirou"
+                  value={employeeName}
+                  onChange={(e) => setEmployeeName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            {/* Observações */}
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Observações de Auditoria
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Detalhes adicionais sobre a movimentação..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 resize-none"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-3 border-t border-slate-100 dark:border-[#262B33] flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#20252D] rounded-xl font-medium transition"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                id="btn-confirm-movement"
-                className={`px-5 py-2.5 rounded-xl font-bold text-xs text-white flex items-center gap-2 shadow-md transition active:scale-95 ${
+                className={`px-5 py-2 text-white font-bold rounded-xl shadow-lg transition active:scale-95 flex items-center gap-1.5 ${
                   type === 'ENTRADA'
-                    ? 'bg-emerald-700 hover:bg-emerald-600'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/20'
                     : type === 'SAIDA'
-                    ? 'bg-red-700 hover:bg-red-600'
-                    : 'bg-amber-600 hover:bg-amber-500'
+                    ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-900/20'
+                    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/20'
                 }`}
               >
                 <Check className="w-4 h-4" />
-                Confirmar {type === 'ENTRADA' ? 'Entrada' : type === 'SAIDA' ? 'Saída' : 'Movimentação'}
+                <span>Confirmar Lançamento</span>
               </button>
             </div>
           </form>
@@ -513,7 +516,3 @@ export const MovementModal: React.FC<MovementModalProps> = ({
     </AnimatePresence>
   );
 };
-
-function currentProductStockText(prod: Product) {
-  return `${prod.currentStock} ${prod.unit} (${prod.category})`;
-}

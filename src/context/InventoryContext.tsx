@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Product,
   StockMovement,
@@ -10,6 +10,8 @@ import {
   InventoryStats,
   MovementType,
   MovementReason,
+  ToolUsageRanking,
+  EmployeeRanking,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -17,6 +19,27 @@ import {
   INITIAL_SUPPLIERS,
   INITIAL_SETTINGS,
 } from '../data/initialData';
+import {
+  firebaseConfig,
+  db,
+  testFirestoreConnection,
+  seedInitialFirestoreData,
+  saveProductToFirestore,
+  saveMovementToFirestore,
+  saveSupplierToFirestore,
+  saveSettingsToFirestore,
+  handleFirestoreError,
+  OperationType,
+} from '../lib/firebase';
+import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+
+export interface FirebaseStatusInfo {
+  connected: boolean;
+  projectId: string;
+  lastSyncTime: string;
+  isSyncing: boolean;
+  message: string;
+}
 
 interface InventoryContextType {
   products: Product[];
@@ -31,6 +54,14 @@ interface InventoryContextType {
   pendingSyncCount: number;
   lastSyncTime: string;
   stats: InventoryStats;
+
+  // Rankings
+  toolsRanking: ToolUsageRanking[];
+  employeeRanking: EmployeeRanking[];
+
+  // Firebase
+  firebaseStatus: FirebaseStatusInfo;
+  syncWithFirebase: () => Promise<void>;
 
   // Product Actions
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'lastMovementDate'>) => Product;
@@ -78,13 +109,13 @@ interface InventoryContextType {
 const InventoryContext = createContext<InventoryContextType | null>(null);
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'borges_gomes_products_v1',
-  MOVEMENTS: 'borges_gomes_movements_v1',
-  SUPPLIERS: 'borges_gomes_suppliers_v1',
-  SETTINGS: 'borges_gomes_settings_v1',
-  BACKUPS: 'borges_gomes_backups_v1',
-  SYNC_QUEUE: 'borges_gomes_sync_queue_v1',
-  LAST_SYNC: 'borges_gomes_last_sync_v1',
+  PRODUCTS: 'almoxarifado_products_v2',
+  MOVEMENTS: 'almoxarifado_movements_v2',
+  SUPPLIERS: 'almoxarifado_suppliers_v2',
+  SETTINGS: 'almoxarifado_settings_v2',
+  BACKUPS: 'almoxarifado_backups_v2',
+  SYNC_QUEUE: 'almoxarifado_sync_queue_v2',
+  LAST_SYNC: 'almoxarifado_last_sync_v2',
 };
 
 // Web Audio API beep sound generator
@@ -125,7 +156,7 @@ function playAudioTone(type: 'success' | 'warning' | 'error' = 'success') {
       osc.stop(ctx.currentTime + 0.3);
     }
   } catch {
-    // Ignore audio context autoplay restrictions gracefully
+    // Ignore audio restrictions
   }
 }
 
@@ -170,16 +201,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [backupHistory, setBackupHistory] = useState<CloudBackupRecord[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.BACKUPS);
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 'bcp-01',
-          timestamp: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-          totalProducts: 10,
-          totalMovements: 6,
-          sizeKb: 14.8,
-          status: 'SUCCESS',
-        },
-      ];
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
@@ -192,6 +214,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
   const [supplierQuotes, setSupplierQuotes] = useState<SupplierPriceQuote[]>([]);
   const [alerts, setAlerts] = useState<StockAlert[]>([]);
+
+  const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatusInfo>({
+    connected: false,
+    projectId: firebaseConfig.projectId,
+    lastSyncTime: new Date().toISOString(),
+    isSyncing: false,
+    message: 'Inicializando conexão com Firebase...',
+  });
+
+  const playBeepSound = useCallback((type: 'success' | 'warning' | 'error' = 'success') => {
+    if (settings.beepSoundEnabled) {
+      playAudioTone(type);
+    }
+  }, [settings.beepSoundEnabled]);
 
   // 2. Save persistence whenever state changes
   useEffect(() => {
@@ -208,7 +244,6 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    // Apply theme class to document body
     if (settings.theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else if (settings.theme === 'light') {
@@ -224,15 +259,36 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     localStorage.setItem(STORAGE_KEYS.BACKUPS, JSON.stringify(backupHistory));
   }, [backupHistory]);
 
-  // 3. Online/Offline Listener & Auto-Sync
+  // 3. Online / Offline & Firebase Initialization
   useEffect(() => {
+    const checkConn = async () => {
+      const res = await testFirestoreConnection();
+      setFirebaseStatus((prev) => ({
+        ...prev,
+        connected: res.connected,
+        message: res.message,
+        lastSyncTime: new Date().toISOString(),
+      }));
+
+      if (res.connected) {
+        // Seed initial data if Firestore is empty
+        await seedInitialFirestoreData(products, movements, suppliers);
+      }
+    };
+
+    checkConn();
+
     const handleOnline = () => {
       setIsOnline(true);
-      // Auto trigger sync on reconnect
-      syncNow();
+      checkConn();
     };
     const handleOffline = () => {
       setIsOnline(false);
+      setFirebaseStatus((prev) => ({
+        ...prev,
+        connected: false,
+        message: 'Modo Offline: dados salvos localmente',
+      }));
     };
 
     window.addEventListener('online', handleOnline);
@@ -244,7 +300,53 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  // 4. Calculate Alerts on Product or Movement change
+  // 4. Real-time Firestore Listeners with Offline IndexedDB Support
+  useEffect(() => {
+    try {
+      const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudProds: Product[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data() as Product;
+            if (data.id && data.sku) {
+              cloudProds.push(data);
+            }
+          });
+          if (cloudProds.length > 0) {
+            setProducts(cloudProds);
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'products');
+      });
+
+      const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudMovs: StockMovement[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data() as StockMovement;
+            if (data.id && data.productId) {
+              cloudMovs.push(data);
+            }
+          });
+          if (cloudMovs.length > 0) {
+            setMovements(cloudMovs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'movements');
+      });
+
+      return () => {
+        unsubProducts();
+        unsubMovements();
+      };
+    } catch (e) {
+      console.warn('Firestore snapshot setup error:', e);
+    }
+  }, []);
+
+  // 5. Calculate Alerts
   useEffect(() => {
     const newAlerts: StockAlert[] = [];
     const now = new Date();
@@ -284,7 +386,6 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
       }
 
-      // Expiry Date check
       if (p.expiryDate) {
         const exp = new Date(p.expiryDate);
         const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 3600 * 24));
@@ -299,8 +400,8 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             message: `Validade do Lote em ${diffDays} dias (${p.expiryDate}). Priorize aplicação PEPS/FIFO.`,
             currentStock: p.currentStock,
             minStock: p.minStock,
-            suggestedReorderQuantity: 0,
-            estimatedCost: 0,
+            suggestedReorderQuantity: p.maxStock,
+            estimatedCost: p.maxStock * p.costPrice,
             createdAt: new Date().toISOString(),
           });
         }
@@ -310,94 +411,228 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAlerts(newAlerts);
   }, [products]);
 
-  // 5. Automatic periodic Cloud Backup check
-  useEffect(() => {
-    if (!settings.autoBackup) return;
-    const intervalMs = settings.backupIntervalHours * 3600 * 1000;
-    const timer = setInterval(() => {
-      createCloudBackup();
-    }, intervalMs);
-    return () => clearInterval(timer);
-  }, [settings.autoBackup, settings.backupIntervalHours, products, movements]);
+  // 6. Tools Ranking Calculation
+  const toolsRanking: ToolUsageRanking[] = useMemo(() => {
+    const toolStatsMap: Record<string, {
+      timesRequested: number;
+      totalQuantityUsed: number;
+      totalValueUsed: number;
+      lastUsedDate: string;
+      employeeCounts: Record<string, number>;
+      sectorCounts: Record<string, number>;
+    }> = {};
 
-  // 6. Sound player helper
-  const playBeepSound = useCallback((type: 'success' | 'warning' | 'error' = 'success') => {
-    if (settings.soundAlerts) {
-      playAudioTone(type);
-    }
-  }, [settings.soundAlerts]);
-
-  // 7. Product Operations
-  const addProduct = useCallback(
-    (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'lastMovementDate'>): Product => {
-      const now = new Date().toISOString();
-      const newProduct: Product = {
-        ...productData,
-        id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        createdAt: now,
-        updatedAt: now,
-        lastMovementDate: now,
-      };
-
-      setProducts((prev) => [newProduct, ...prev]);
-
-      // If product was created with positive initial stock, generate a SALDO_INICIAL movement
-      if (newProduct.currentStock > 0) {
-        const initialMovement: StockMovement = {
-          id: `mov-${Date.now()}`,
-          productId: newProduct.id,
-          productName: newProduct.name,
-          productSku: newProduct.sku,
-          type: 'ENTRADA',
-          reason: 'SALDO_INICIAL',
-          quantity: newProduct.currentStock,
-          previousStock: 0,
-          newStock: newProduct.currentStock,
-          unitCost: newProduct.costPrice,
-          totalCost: newProduct.currentStock * newProduct.costPrice,
-          documentNumber: 'CADASTRO_INICIAL',
-          requesterSector: 'Almoxarifado Geral',
-          operatorName: 'Administrador Borges e Gomes',
-          notes: 'Cadastro inicial de produto no catálogo.',
-          timestamp: now,
-          synced: isOnline,
-        };
-        setMovements((prev) => [initialMovement, ...prev]);
+    movements.forEach((m) => {
+      if (m.type === 'SAIDA') {
+        if (!toolStatsMap[m.productId]) {
+          toolStatsMap[m.productId] = {
+            timesRequested: 0,
+            totalQuantityUsed: 0,
+            totalValueUsed: 0,
+            lastUsedDate: m.timestamp,
+            employeeCounts: {},
+            sectorCounts: {},
+          };
+        }
+        const st = toolStatsMap[m.productId];
+        st.timesRequested += 1;
+        st.totalQuantityUsed += m.quantity;
+        st.totalValueUsed += m.totalCost || (m.quantity * m.unitCost);
+        if (new Date(m.timestamp) > new Date(st.lastUsedDate)) {
+          st.lastUsedDate = m.timestamp;
+        }
+        const emp = m.employeeName || m.operatorName || 'Colaborador';
+        st.employeeCounts[emp] = (st.employeeCounts[emp] || 0) + m.quantity;
+        const sec = m.requesterSector || 'Geral';
+        st.sectorCounts[sec] = (st.sectorCounts[sec] || 0) + m.quantity;
       }
+    });
 
-      playBeepSound('success');
-      return newProduct;
-    },
-    [isOnline, playBeepSound]
-  );
+    return products
+      .filter((p) => p.category === 'Ferramentas' || (toolStatsMap[p.id]?.timesRequested || 0) > 0)
+      .map((p) => {
+        const st = toolStatsMap[p.id] || {
+          timesRequested: 0,
+          totalQuantityUsed: 0,
+          totalValueUsed: 0,
+          lastUsedDate: p.lastMovementDate || p.updatedAt,
+          employeeCounts: {},
+          sectorCounts: {},
+        };
+
+        let topEmployee = 'Nenhum';
+        let maxEmpCount = 0;
+        Object.entries(st.employeeCounts).forEach(([emp, count]) => {
+          if (count > maxEmpCount) {
+            maxEmpCount = count;
+            topEmployee = emp;
+          }
+        });
+
+        let topSector = 'Geral';
+        let maxSecCount = 0;
+        Object.entries(st.sectorCounts).forEach(([sec, count]) => {
+          if (count > maxSecCount) {
+            maxSecCount = count;
+            topSector = sec;
+          }
+        });
+
+        return {
+          productId: p.id,
+          sku: p.sku,
+          name: p.name,
+          category: p.category,
+          unit: p.unit,
+          currentStock: p.currentStock,
+          costPrice: p.costPrice,
+          timesRequested: st.timesRequested,
+          totalQuantityUsed: st.totalQuantityUsed,
+          totalValueUsed: st.totalValueUsed,
+          lastUsedDate: st.lastUsedDate,
+          topEmployee,
+          topSector,
+        };
+      })
+      .sort((a, b) => {
+        if (b.timesRequested !== a.timesRequested) {
+          return b.timesRequested - a.timesRequested;
+        }
+        return b.totalQuantityUsed - a.totalQuantityUsed;
+      });
+  }, [products, movements]);
+
+  // 7. Employee Ranking Calculation
+  const employeeRanking: EmployeeRanking[] = useMemo(() => {
+    const empMap: Record<string, {
+      employeeName: string;
+      sector: string;
+      totalMovements: number;
+      totalItemsTaken: number;
+      totalValueTaken: number;
+      toolsTakenCount: number;
+      itemCounts: Record<string, number>;
+      lastActiveDate: string;
+    }> = {};
+
+    movements.forEach((m) => {
+      if (m.type === 'SAIDA') {
+        const empName = m.employeeName || m.operatorName || 'Colaborador';
+        if (!empMap[empName]) {
+          empMap[empName] = {
+            employeeName: empName,
+            sector: m.requesterSector || 'Almoxarifado Central',
+            totalMovements: 0,
+            totalItemsTaken: 0,
+            totalValueTaken: 0,
+            toolsTakenCount: 0,
+            itemCounts: {},
+            lastActiveDate: m.timestamp,
+          };
+        }
+
+        const emp = empMap[empName];
+        emp.totalMovements += 1;
+        emp.totalItemsTaken += m.quantity;
+        emp.totalValueTaken += m.totalCost || (m.quantity * m.unitCost);
+        emp.itemCounts[m.productName] = (emp.itemCounts[m.productName] || 0) + m.quantity;
+        if (new Date(m.timestamp) > new Date(emp.lastActiveDate)) {
+          emp.lastActiveDate = m.timestamp;
+        }
+        if (m.requesterSector) {
+          emp.sector = m.requesterSector;
+        }
+
+        const prod = products.find((p) => p.id === m.productId);
+        if (prod?.category === 'Ferramentas') {
+          emp.toolsTakenCount += m.quantity;
+        }
+      }
+    });
+
+    return Object.values(empMap).map((emp) => {
+      let mostUsedItem = 'Nenhum';
+      let maxCount = 0;
+      Object.entries(emp.itemCounts).forEach(([item, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          mostUsedItem = item;
+        }
+      });
+
+      return {
+        employeeName: emp.employeeName,
+        sector: emp.sector,
+        totalMovements: emp.totalMovements,
+        totalItemsTaken: emp.totalItemsTaken,
+        totalValueTaken: emp.totalValueTaken,
+        toolsTakenCount: emp.toolsTakenCount,
+        mostUsedItem,
+        lastActiveDate: emp.lastActiveDate,
+      };
+    }).sort((a, b) => {
+      if (b.totalMovements !== a.totalMovements) {
+        return b.totalMovements - a.totalMovements;
+      }
+      return b.totalItemsTaken - a.totalItemsTaken;
+    });
+  }, [products, movements]);
+
+  // Product Actions
+  const addProduct = useCallback((productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'lastMovementDate'>) => {
+    const now = new Date().toISOString();
+    const newProduct: Product = {
+      ...productData,
+      id: `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: now,
+      updatedAt: now,
+      lastMovementDate: now,
+    };
+    setProducts((prev) => [newProduct, ...prev]);
+    saveProductToFirestore(newProduct);
+    playBeepSound('success');
+    return newProduct;
+  }, [playBeepSound]);
 
   const updateProduct = useCallback((id: string, updates: Partial<Product>) => {
+    const now = new Date().toISOString();
     setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          const updated = { ...p, ...updates, updatedAt: now };
+          saveProductToFirestore(updated);
+          return updated;
+        }
+        return p;
+      })
     );
     playBeepSound('success');
   }, [playBeepSound]);
 
   const deleteProduct = useCallback((id: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== id));
+    try {
+      deleteDoc(doc(db, 'products', id));
+    } catch (e) {
+      console.warn('Delete product error:', e);
+    }
     playBeepSound('warning');
   }, [playBeepSound]);
 
   const getProductByBarcodeOrSku = useCallback(
     (code: string): Product | undefined => {
-      const trimmed = code.trim().toLowerCase();
-      if (!trimmed) return undefined;
+      const cleanCode = code.trim().toLowerCase();
       return products.find(
         (p) =>
-          p.barcode.toLowerCase() === trimmed ||
-          p.sku.toLowerCase() === trimmed ||
-          p.id.toLowerCase() === trimmed
+          p.barcode.toLowerCase() === cleanCode ||
+          p.sku.toLowerCase() === cleanCode ||
+          p.id.toLowerCase() === cleanCode
       );
     },
     [products]
   );
 
-  // 8. Register Stock Movement (ENTRADA / SAÍDA / AJUSTE / TRANSFERÊNCIA)
+  // Movement Action
   const registerMovement = useCallback(
     (data: {
       productId: string;
@@ -414,98 +649,113 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const product = products.find((p) => p.id === data.productId);
       if (!product) {
         playBeepSound('error');
-        return { success: false, error: 'Produto não encontrado no sistema.' };
+        return { success: false, error: 'Produto não encontrado no estoque.' };
       }
 
-      const qty = Math.abs(data.quantity);
-      if (qty <= 0) {
+      if (data.quantity <= 0) {
         playBeepSound('error');
-        return { success: false, error: 'Quantidade de movimentação deve ser maior que zero.' };
+        return { success: false, error: 'Quantidade informada deve ser maior que zero.' };
       }
 
-      const prevStock = product.currentStock;
-      let newStock = prevStock;
+      const previousStock = product.currentStock;
+      let newStock = previousStock;
 
       if (data.type === 'ENTRADA') {
-        newStock = prevStock + qty;
+        newStock = previousStock + data.quantity;
       } else if (data.type === 'SAIDA') {
-        if (prevStock < qty) {
+        if (previousStock < data.quantity) {
           playBeepSound('error');
           return {
             success: false,
-            error: `Estoque insuficiente! Saldo disponível: ${prevStock} ${product.unit}, solicitação: ${qty} ${product.unit}.`,
+            error: `Saldo insuficiente em estoque! Disponível: ${previousStock} ${product.unit}, Solicitado: ${data.quantity} ${product.unit}.`,
           };
         }
-        newStock = prevStock - qty;
+        newStock = previousStock - data.quantity;
       } else if (data.type === 'AJUSTE') {
-        newStock = data.quantity; // In adjustment, quantity is the new physical counted stock
+        newStock = data.quantity;
       }
 
-      const costPerUnit = data.unitCost !== undefined && data.unitCost > 0 ? data.unitCost : product.costPrice;
-      const totalCostCalc = (data.type === 'AJUSTE' ? Math.abs(newStock - prevStock) : qty) * costPerUnit;
+      const unitCost = data.unitCost !== undefined ? data.unitCost : product.costPrice;
+      const totalCost = unitCost * (data.type === 'AJUSTE' ? Math.abs(newStock - previousStock) : data.quantity);
       const now = new Date().toISOString();
 
-      const newMovement: StockMovement = {
-        id: `mov-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`,
+      const movement: StockMovement = {
+        id: `mov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         productId: product.id,
         productName: product.name,
         productSku: product.sku,
         type: data.type,
         reason: data.reason,
-        quantity: data.type === 'AJUSTE' ? Math.abs(newStock - prevStock) : qty,
-        previousStock: prevStock,
-        newStock: newStock,
-        unitCost: costPerUnit,
-        totalCost: totalCostCalc,
+        quantity: data.quantity,
+        previousStock,
+        newStock,
+        unitCost,
+        totalCost,
         documentNumber: data.documentNumber?.trim(),
         requesterSector: data.requesterSector?.trim() || 'Almoxarifado Central',
-        operatorName: data.operatorName.trim() || 'Operador Borges e Gomes',
+        operatorName: data.operatorName.trim() || 'Almoxarife',
         employeeName: data.employeeName?.trim() || undefined,
         notes: data.notes?.trim(),
         timestamp: now,
         synced: isOnline,
       };
 
-      // Update product stock and lastMovementDate
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === product.id
-            ? {
-                ...p,
-                currentStock: newStock,
-                costPrice: data.unitCost && data.type === 'ENTRADA' ? data.unitCost : p.costPrice,
-                lastMovementDate: now,
-                updatedAt: now,
-              }
-            : p
-        )
-      );
+      // 1. Update Product stock
+      const updatedProduct: Product = {
+        ...product,
+        currentStock: newStock,
+        lastMovementDate: now,
+        updatedAt: now,
+        ...(data.type === 'ENTRADA' && data.unitCost ? { costPrice: data.unitCost } : {}),
+      };
 
-      setMovements((prev) => [newMovement, ...prev]);
+      setProducts((prev) => prev.map((p) => (p.id === product.id ? updatedProduct : p)));
+      setMovements((prev) => [movement, ...prev]);
 
-      if (newStock <= product.minStock) {
-        playBeepSound('warning');
-      } else {
-        playBeepSound('success');
-      }
+      // 2. Persist to Firestore
+      saveMovementToFirestore(movement);
+      saveProductToFirestore(updatedProduct);
 
-      return { success: true, movement: newMovement };
+      playBeepSound('success');
+      return { success: true, movement };
     },
     [products, isOnline, playBeepSound]
   );
 
-  // 9. External Supplier API Integration (Price auto-update & comparison)
+  // Supplier Actions
+  const addSupplier = useCallback((supplierData: Omit<Supplier, 'id'>) => {
+    const newSupplier: Supplier = {
+      ...supplierData,
+      id: `sup-${Date.now()}`,
+    };
+    setSuppliers((prev) => [...prev, newSupplier]);
+    saveSupplierToFirestore(newSupplier);
+    playBeepSound('success');
+  }, [playBeepSound]);
+
+  const updateSupplier = useCallback((id: string, updates: Partial<Supplier>) => {
+    setSuppliers((prev) =>
+      prev.map((s) => {
+        if (s.id === id) {
+          const upd = { ...s, ...updates };
+          saveSupplierToFirestore(upd);
+          return upd;
+        }
+        return s;
+      })
+    );
+    playBeepSound('success');
+  }, [playBeepSound]);
+
   const fetchExternalSupplierQuotes = useCallback(async (): Promise<SupplierPriceQuote[]> => {
     setIsSyncing(true);
-    // Simulating external REST API calls to all registered active suppliers with realistic price market swings
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await new Promise((resolve) => setTimeout(resolve, 750));
 
-    const quotes: SupplierPriceQuote[] = products.map((prod) => {
+    const simulatedQuotes: SupplierPriceQuote[] = products.map((prod) => {
       const sup = suppliers.find((s) => s.id === prod.supplierId) || suppliers[0];
-      // Random price variation factor between -8% and +12% based on market inflation/commodity rates
-      const variationFactor = 1 + (Math.sin(prod.name.length * 7 + Date.now() / 100000) * 0.10);
-      const quotedPrice = Number((prod.costPrice * variationFactor).toFixed(2));
-      const changePct = Number((((quotedPrice - prod.costPrice) / prod.costPrice) * 100).toFixed(1));
+      const variance = (Math.random() * 0.16) - 0.08;
+      const newPrice = Number((prod.costPrice * (1 + variance)).toFixed(2));
+      const pct = Number((((newPrice - prod.costPrice) / prod.costPrice) * 100).toFixed(1));
 
       return {
         productId: prod.id,
@@ -514,101 +764,97 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         supplierId: sup.id,
         supplierName: sup.name,
         currentSystemCost: prod.costPrice,
-        newQuotedPrice: quotedPrice,
+        newQuotedPrice: newPrice,
         currency: 'BRL',
         lastUpdated: new Date().toISOString(),
-        leadTimeDays: sup.leadTimeDays,
+        leadTimeDays: sup.leadTimeDays || 3,
         availability: Math.random() > 0.3 ? 'IMMEDIATE' : '2_5_DAYS',
-        priceChangePercent: changePct,
+        priceChangePercent: pct,
       };
     });
 
-    setSupplierQuotes(quotes);
+    setSupplierQuotes(simulatedQuotes);
     setIsSyncing(false);
-    return quotes;
-  }, [products, suppliers]);
+    playBeepSound('success');
+    return simulatedQuotes;
+  }, [products, suppliers, playBeepSound]);
 
-  const applySupplierPriceUpdate = useCallback(
-    (productId: string, newCostPrice: number) => {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === productId
-            ? {
-                ...p,
-                costPrice: newCostPrice,
-                updatedAt: new Date().toISOString(),
-              }
-            : p
-        )
-      );
-      // Remove applied quote from pending list
-      setSupplierQuotes((prev) => prev.filter((q) => q.productId !== productId));
-      playBeepSound('success');
-    },
-    [playBeepSound]
-  );
+  const applySupplierPriceUpdate = useCallback((productId: string, newCostPrice: number) => {
+    updateProduct(productId, { costPrice: newCostPrice });
+    setSupplierQuotes((prev) => prev.filter((q) => q.productId !== productId));
+  }, [updateProduct]);
 
   const applyAllSupplierPriceUpdates = useCallback(() => {
-    if (supplierQuotes.length === 0) return;
-    setProducts((prev) =>
-      prev.map((p) => {
-        const quote = supplierQuotes.find((q) => q.productId === p.id);
-        if (quote) {
-          return {
-            ...p,
-            costPrice: quote.newQuotedPrice,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-        return p;
-      })
-    );
+    supplierQuotes.forEach((quote) => {
+      updateProduct(quote.productId, { costPrice: quote.newQuotedPrice });
+    });
     setSupplierQuotes([]);
     playBeepSound('success');
-  }, [supplierQuotes, playBeepSound]);
+  }, [supplierQuotes, updateProduct, playBeepSound]);
 
-  // 10. Supplier Management
-  const addSupplier = useCallback((supplierData: Omit<Supplier, 'id'>) => {
-    const newSup: Supplier = {
-      ...supplierData,
-      id: `sup-${Date.now()}`,
-    };
-    setSuppliers((prev) => [...prev, newSup]);
-    playBeepSound('success');
-  }, [playBeepSound]);
-
-  const updateSupplier = useCallback((id: string, updates: Partial<Supplier>) => {
-    setSuppliers((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
-    playBeepSound('success');
-  }, [playBeepSound]);
-
-  // 11. Settings & Themes
   const updateSettings = useCallback((updates: Partial<AppSettings>) => {
-    setSettings((prev) => ({ ...prev, ...updates }));
-  }, []);
+    setSettings((prev) => {
+      const updated = { ...prev, ...updates };
+      saveSettingsToFirestore(updated);
+      return updated;
+    });
+    playBeepSound('success');
+  }, [playBeepSound]);
 
   const toggleTheme = useCallback(() => {
-    setSettings((prev) => ({
-      ...prev,
-      theme: prev.theme === 'dark' ? 'light' : 'dark',
-    }));
+    setSettings((prev) => {
+      const nextTheme = prev.theme === 'dark' ? 'light' : 'dark';
+      const upd = { ...prev, theme: nextTheme as 'light' | 'dark' };
+      saveSettingsToFirestore(upd);
+      return upd;
+    });
   }, []);
 
-  // 12. Backup & Sync Operations
-  const pendingSyncCount = movements.filter((m) => !m.synced).length;
+  const syncWithFirebase = useCallback(async () => {
+    setIsSyncing(true);
+    setFirebaseStatus((prev) => ({ ...prev, isSyncing: true, message: 'Sincronizando com Firestore...' }));
+    
+    try {
+      const res = await testFirestoreConnection();
+      if (res.connected) {
+        await seedInitialFirestoreData(products, movements, suppliers);
+        const nowIso = new Date().toISOString();
+        setLastSyncTime(nowIso);
+        setFirebaseStatus({
+          connected: true,
+          projectId: firebaseConfig.projectId,
+          lastSyncTime: nowIso,
+          isSyncing: false,
+          message: `Sincronizado com sucesso com Firebase (${firebaseConfig.projectId})`,
+        });
+        playBeepSound('success');
+      } else {
+        setFirebaseStatus({
+          connected: false,
+          projectId: firebaseConfig.projectId,
+          lastSyncTime: new Date().toISOString(),
+          isSyncing: false,
+          message: 'Falha ao sincronizar com Firebase: ' + res.message,
+        });
+        playBeepSound('error');
+      }
+    } catch (e: any) {
+      setFirebaseStatus({
+        connected: false,
+        projectId: firebaseConfig.projectId,
+        lastSyncTime: new Date().toISOString(),
+        isSyncing: false,
+        message: 'Erro: ' + (e?.message || 'Falha de conexão'),
+      });
+      playBeepSound('error');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [products, movements, suppliers, playBeepSound]);
 
   const syncNow = useCallback(async () => {
-    setIsSyncing(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    // Mark all movements as synced
-    setMovements((prev) => prev.map((m) => ({ ...m, synced: true })));
-    const nowIso = new Date().toISOString();
-    setLastSyncTime(nowIso);
-    localStorage.setItem(STORAGE_KEYS.LAST_SYNC, nowIso);
-    setIsSyncing(false);
-    playBeepSound('success');
-  }, [playBeepSound]);
+    await syncWithFirebase();
+  }, [syncWithFirebase]);
 
   const createCloudBackup = useCallback((): CloudBackupRecord => {
     const snapshot = {
@@ -638,22 +884,25 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const exportDatabaseJson = useCallback(() => {
     const snapshot = {
-      app: 'Borges e Gomes - Almoxarifado',
+      app: 'Almoxarifado & Logística',
+      firebaseProject: firebaseConfig.projectId,
       exportedAt: new Date().toISOString(),
       products,
       movements,
       suppliers,
       settings,
+      toolsRanking,
+      employeeRanking,
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Borges_e_Gomes_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `Almoxarifado_Backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     playBeepSound('success');
-  }, [products, movements, suppliers, settings, playBeepSound]);
+  }, [products, movements, suppliers, settings, toolsRanking, employeeRanking, playBeepSound]);
 
   const importDatabaseJson = useCallback(
     (jsonString: string): boolean => {
@@ -690,7 +939,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAlerts((prev) => prev.filter((a) => a.id !== alertId));
   }, []);
 
-  // 13. Inventory Stats Calculations
+  const pendingSyncCount = movements.filter((m) => !m.synced).length;
+
+  // Inventory Stats Calculations
   const stats: InventoryStats = {
     totalItems: products.reduce((acc, p) => acc + p.currentStock, 0),
     totalSkus: products.length,
@@ -709,7 +960,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const today = new Date().toISOString().slice(0, 10);
       return m.timestamp.startsWith(today) && m.type === 'SAIDA';
     }).length,
-    stockAccuracyPercent: 99.4,
+    stockAccuracyPercent: 99.6,
   };
 
   return (
@@ -727,6 +978,10 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         pendingSyncCount,
         lastSyncTime,
         stats,
+        toolsRanking,
+        employeeRanking,
+        firebaseStatus,
+        syncWithFirebase,
         addProduct,
         updateProduct,
         deleteProduct,

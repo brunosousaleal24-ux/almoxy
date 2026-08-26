@@ -171,6 +171,17 @@ export interface CloudBackupRecord {
   status: 'SUCCESS' | 'PENDING' | 'FAILED';
 }
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: 'ADMIN' | 'ALMOXARIFE' | 'OPERADOR' | 'AUDITOR';
+  department: string;
+  photoURL?: string;
+  createdAt: string;
+  lastLogin?: string;
+}
+
 export interface InventoryStats {
   totalItems: number;
   totalSkus: number;

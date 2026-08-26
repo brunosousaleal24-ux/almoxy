@@ -17,8 +17,13 @@ import {
   Settings,
   AlertTriangle,
   CheckCircle2,
+  User,
+  ShieldCheck,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
+import { useAuth } from '../context/AuthContext';
 
 export type ActiveTab =
   | 'dashboard'
@@ -36,6 +41,7 @@ interface HeaderProps {
   onOpenScanner: () => void;
   onOpenMovementModal: () => void;
   onOpenProductModal: () => void;
+  onOpenAuthModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenScanner,
   onOpenMovementModal,
   onOpenProductModal,
+  onOpenAuthModal,
 }) => {
   const {
     settings,
@@ -56,9 +63,21 @@ export const Header: React.FC<HeaderProps> = ({
     dismissAlert,
   } = useInventory();
 
+  const { currentUser, userProfile, logout } = useAuth();
+
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const criticalAlerts = alerts.filter((a) => a.severity === 'high');
+
+  const initials = currentUser?.displayName
+    ? currentUser.displayName
+        .split(' ')
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : currentUser?.email?.slice(0, 2).toUpperCase() || 'OP';
 
   return (
     <header className="sticky top-0 z-30 bg-[#FFFFFF]/95 dark:bg-[#121519]/95 backdrop-blur-md border-b border-slate-200/90 dark:border-[#22272E] transition-colors">
@@ -73,14 +92,14 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-serif font-bold text-lg tracking-tight text-slate-900 dark:text-[#F3F4F6]">
-                  BORGES & GOMES
+                  ALMOXARIFADO
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-amber-100/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/60">
-                  Almoxarifado
+                  PRO
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block tracking-tight font-medium">
-                Controle de Estoque • Rastreabilidade Logística • Curva ABC
+                Controle de Estoque • Rastreabilidade Logística • Suporte Offline
               </p>
             </div>
           </div>
@@ -236,6 +255,99 @@ export const Header: React.FC<HeaderProps> = ({
                 <Moon className="w-4 h-4 text-slate-700" />
               )}
             </button>
+
+            {/* Firebase Auth User Profile Dropdown / Login Button */}
+            {currentUser ? (
+              <div className="relative">
+                <button
+                  id="btn-user-profile-toggle"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl bg-slate-100 dark:bg-[#191D23] hover:bg-slate-200 dark:hover:bg-[#222830] border border-slate-200 dark:border-[#2A313C] transition shadow-sm"
+                  title="Perfil e Autenticação Firebase"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-amber-600 text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm">
+                    {initials}
+                  </div>
+                  <div className="hidden lg:block text-left">
+                    <div className="text-[11px] font-bold font-serif text-slate-900 dark:text-white leading-tight max-w-[100px] truncate">
+                      {currentUser.displayName || currentUser.email?.split('@')[0]}
+                    </div>
+                    <div className="text-[9px] text-amber-600 dark:text-amber-400 font-mono">
+                      {userProfile?.role || 'Almoxarife'}
+                    </div>
+                  </div>
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#16191D] border border-slate-200 dark:border-[#282E37] rounded-xl shadow-2xl p-3 z-50 animate-fade-in">
+                    <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100 dark:border-[#232830]">
+                      <div className="w-9 h-9 rounded-xl bg-amber-600 text-white font-serif font-bold text-sm flex items-center justify-center shadow-md">
+                        {initials}
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="font-serif font-bold text-xs text-slate-900 dark:text-white truncate">
+                          {currentUser.displayName || 'Operador'}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
+                          {currentUser.email}
+                        </div>
+                        <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Firebase Auth Ativo
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="py-2 space-y-1 text-xs">
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          onOpenAuthModal();
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#20252D] transition flex items-center gap-2"
+                      >
+                        <User className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Gerenciar Meu Perfil</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          setActiveTab('settings');
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#20252D] transition flex items-center gap-2"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Status da Conexão Nuvem</span>
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 dark:border-[#232830]">
+                      <button
+                        onClick={async () => {
+                          setShowUserMenu(false);
+                          await logout();
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition flex items-center gap-2 text-xs font-semibold"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sair da Conta (Logout)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                id="btn-open-login"
+                onClick={onOpenAuthModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 hover:bg-slate-800 dark:hover:bg-amber-400 transition shadow-sm active:scale-95"
+                title="Acessar com E-mail e Senha Firebase"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Entrar (Login)</span>
+              </button>
+            )}
           </div>
         </div>
 

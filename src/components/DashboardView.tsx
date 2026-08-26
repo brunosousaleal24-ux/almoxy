@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -28,10 +28,23 @@ import {
   FileText,
   Clock,
   Layers,
+  Wrench,
+  Users,
+  Award,
+  Search,
+  CheckCircle2,
+  RefreshCw,
+  Wifi,
+  ExternalLink,
+  Filter,
+  Sparkles,
+  Flame,
+  UserCheck,
+  Building,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
-import { formatCurrency, formatDate } from '../utils/exportUtils';
-import { Product } from '../types';
+import { formatCurrency, formatDate, exportInventoryToExcel, exportMovementsToPDF } from '../utils/exportUtils';
+import { Product, ProductCategory } from '../types';
 
 interface DashboardViewProps {
   onOpenScanner: () => void;
@@ -57,10 +70,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectProduct,
   onNavigateTab,
 }) => {
-  const { products, movements, stats, alerts } = useInventory();
+  const {
+    products,
+    movements,
+    stats,
+    alerts,
+    toolsRanking,
+    employeeRanking,
+    firebaseStatus,
+    syncWithFirebase,
+    isSyncing,
+  } = useInventory();
+
+  // Search & Filter state for Rankings
+  const [toolSearch, setToolSearch] = useState('');
+  const [toolCategoryFilter, setToolCategoryFilter] = useState<string>('TODAS');
+  const [employeeSearch, setEmployeeSearch] = useState('');
+
+  // Quick SKU / Barcode Terminal search
+  const [terminalQuery, setTerminalQuery] = useState('');
 
   // 1. Prepare Daily Trend Data (Last 7 Days)
-  const last7DaysData = React.useMemo(() => {
+  const last7DaysData = useMemo(() => {
     const days: { [key: string]: { date: string; entradas: number; saidas: number; valorEntradas: number; valorSaidas: number } } = {};
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -86,8 +117,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return Object.values(days);
   }, [movements]);
 
-  // 2. Prepare Category Valuation Distribution
-  const categoryDistribution = React.useMemo(() => {
+  // 2. Sector / Department consumption distribution
+  const sectorDistribution = useMemo(() => {
+    const sectorMap: { [sec: string]: { sector: string; count: number; value: number } } = {};
+    movements
+      .filter((m) => m.type === 'SAIDA')
+      .forEach((m) => {
+        const sec = m.requesterSector || 'Geral';
+        if (!sectorMap[sec]) {
+          sectorMap[sec] = { sector: sec, count: 0, value: 0 };
+        }
+        sectorMap[sec].count += m.quantity;
+        sectorMap[sec].value += m.totalCost;
+      });
+
+    return Object.values(sectorMap)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [movements]);
+
+  // 3. Category Valuation Distribution
+  const categoryDistribution = useMemo(() => {
     const map: { [cat: string]: number } = {};
     products.forEach((p) => {
       const val = p.currentStock * p.costPrice;
@@ -100,172 +150,583 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }));
   }, [products]);
 
-  // 3. Top Consumed / Moved Items
-  const topConsumedItems = React.useMemo(() => {
-    const usageMap: { [sku: string]: { name: string; quantity: number; cost: number } } = {};
-    movements
-      .filter((m) => m.type === 'SAIDA')
-      .forEach((m) => {
-        if (!usageMap[m.productSku]) {
-          usageMap[m.productSku] = { name: m.productName, quantity: 0, cost: 0 };
-        }
-        usageMap[m.productSku].quantity += m.quantity;
-        usageMap[m.productSku].cost += m.totalCost;
-      });
+  // Filtered Tools Ranking
+  const filteredTools = useMemo(() => {
+    return toolsRanking.filter((t) => {
+      const matchSearch =
+        t.name.toLowerCase().includes(toolSearch.toLowerCase()) ||
+        t.sku.toLowerCase().includes(toolSearch.toLowerCase());
+      const matchCat = toolCategoryFilter === 'TODAS' || t.category === toolCategoryFilter;
+      return matchSearch && matchCat;
+    });
+  }, [toolsRanking, toolSearch, toolCategoryFilter]);
 
-    return Object.entries(usageMap)
-      .map(([sku, data]) => ({
-        sku,
-        name: data.name.length > 20 ? data.name.slice(0, 18) + '...' : data.name,
-        quantity: data.quantity,
-        totalVal: data.cost,
-      }))
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
-  }, [movements]);
+  // Filtered Employee Ranking
+  const filteredEmployees = useMemo(() => {
+    return employeeRanking.filter((e) => {
+      return (
+        e.employeeName.toLowerCase().includes(employeeSearch.toLowerCase()) ||
+        e.sector.toLowerCase().includes(employeeSearch.toLowerCase())
+      );
+    });
+  }, [employeeRanking, employeeSearch]);
+
+  // Terminal matched product
+  const terminalMatchedProduct = useMemo(() => {
+    if (!terminalQuery.trim()) return null;
+    const q = terminalQuery.trim().toLowerCase();
+    return products.find(
+      (p) =>
+        p.barcode.toLowerCase() === q ||
+        p.sku.toLowerCase() === q ||
+        p.name.toLowerCase().includes(q)
+    );
+  }, [products, terminalQuery]);
+
+  // Top highlight tool and employee
+  const topTool = toolsRanking[0];
+  const topEmployee = employeeRanking[0];
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Welcome Banner with Editorial Brand Lockup */}
-      <div className="bg-gradient-to-r from-[#14171B] via-[#1A1E24] to-[#14171B] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden border border-amber-500/20 dark:border-[#2C333D]">
-        <div className="absolute -right-8 -top-8 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest bg-amber-500/20 text-amber-300 border border-amber-400/30">
-                Centro de Operações Borges & Gomes
+      {/* 1. Master Command Center Banner with Firebase Real-time Status */}
+      <div className="bg-gradient-to-r from-[#121519] via-[#181C23] to-[#121519] rounded-2xl p-6 text-white shadow-xl relative overflow-hidden border border-amber-500/25 dark:border-[#2C333D]">
+        <div className="absolute -right-8 -top-8 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                Painel Executivo 360°
               </span>
-              <span className="text-[11px] font-mono text-slate-400">Tempo Real • 5S</span>
+
+              {/* Firebase Live Cloud Status Pill */}
+              <button
+                onClick={() => syncWithFirebase()}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] uppercase font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-900/80 transition"
+                title={`Projeto Firebase: ${firebaseStatus.projectId} - Clique para forçar sincronização`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Firebase: {firebaseStatus.projectId}</span>
+                {isSyncing ? (
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-emerald-300" />
+                ) : (
+                  <Wifi className="w-2.5 h-2.5 text-emerald-400" />
+                )}
+              </button>
+
+              <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                Sincronizado: {formatDate(firebaseStatus.lastSyncTime)}
+              </span>
             </div>
+
             <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight text-[#F9FAFB]">
-              Gestão Integrada de Almoxarifado
+              Centro Integrado de Almoxarifado & Cautelas
             </h1>
-            <p className="text-sm text-slate-300 max-w-2xl mt-1 font-sans">
-              Controle físico e financeiro de inventário, conferência por código de barras, curva ABC e reposição preventiva.
+            <p className="text-xs sm:text-sm text-slate-300 max-w-3xl font-sans leading-relaxed">
+              Controle unificado em 1 tela: ranking de ferramentas elétricas e equipamentos mais utilizados, colaboradores que mais retiraram materiais, acuracidade de estoque e movimentações em tempo real.
             </p>
           </div>
 
+          {/* Quick Action Buttons Hub */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               id="btn-dash-open-scanner"
               onClick={onOpenScanner}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold font-sans flex items-center gap-2 border border-amber-500/40 shadow-lg transition active:scale-95"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl text-xs font-bold font-sans flex items-center gap-2 border border-amber-500/40 shadow-lg transition active:scale-95"
             >
               <Barcode className="w-4 h-4 text-amber-400" />
-              Bipar Código (Câmera)
+              Bipar Câmera
             </button>
             <button
               id="btn-dash-quick-entry"
               onClick={() => onOpenMovementModal('ENTRADA')}
-              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold font-sans flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition active:scale-95"
+              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 shadow-lg shadow-emerald-900/30 transition active:scale-95"
             >
               <ArrowDownRight className="w-4 h-4" />
-              Dar Entrada (+ NF)
+              + Entrada (NF)
             </button>
             <button
               id="btn-dash-quick-exit"
               onClick={() => onOpenMovementModal('SAIDA')}
-              className="px-4 py-2.5 bg-red-700 hover:bg-red-600 text-white rounded-xl text-xs font-bold font-sans flex items-center gap-2 shadow-lg shadow-red-900/30 transition active:scale-95"
+              className="px-3.5 py-2 bg-red-700 hover:bg-red-600 text-white rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 shadow-lg shadow-red-900/30 transition active:scale-95"
             >
               <ArrowUpRight className="w-4 h-4" />
-              Dar Saída (Requisição)
+              - Cautela / Saída
+            </button>
+            <button
+              onClick={() => exportInventoryToExcel(products)}
+              className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition"
+              title="Exportar Balanço Geral em Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              Excel
             </button>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Valuation Card */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-amber-500/30 transition">
+      {/* 2. Top Executive Metrics (5 Key Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Card 1: Patrimônio Total */}
+        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-amber-500/40 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-              Valor do Patrimônio
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+              Patrimônio Estocado
             </span>
-            <div className="p-2 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900/60">
-              <DollarSign className="w-4 h-4" />
+            <div className="p-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900/60">
+              <DollarSign className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-xl sm:text-2xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
+          <div className="mt-2.5">
+            <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
               {formatCurrency(stats.totalValuation)}
             </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
-              <Layers className="w-3.5 h-3.5 text-amber-500" />
-              <span className="font-mono text-[11px]">{stats.totalSkus} SKUs catalogados</span>
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <Layers className="w-3 h-3 text-amber-500" />
+              <span className="font-mono">{stats.totalSkus} SKUs catalogados</span>
             </div>
           </div>
         </div>
 
-        {/* Total Physical Stock Card */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-emerald-500/30 transition">
+        {/* Card 2: Itens no Galpão */}
+        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-emerald-500/40 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-              Itens no Galpão
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+              Saldo Físico Geral
             </span>
-            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-900/60">
-              <PackageCheck className="w-4 h-4" />
+            <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-900/60">
+              <PackageCheck className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-xl sm:text-2xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
+          <div className="mt-2.5">
+            <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
               {stats.totalItems.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400 font-sans">unidades</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span className="font-mono text-[11px]">+{stats.entriesToday} entradas hoje</span>
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+              <TrendingUp className="w-3 h-3" />
+              <span className="font-mono">+{stats.entriesToday} entradas hoje</span>
             </div>
           </div>
         </div>
 
-        {/* Exits Today Card */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-red-500/30 transition">
+        {/* Card 3: Ferramenta Mais Usada */}
+        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-amber-500/40 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-              Saídas / Requisições
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+              <Flame className="w-3 h-3 text-amber-500" />
+              Ferramenta Nº 1
             </span>
-            <div className="p-2 bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 rounded-lg border border-red-200 dark:border-red-900/60">
-              <TrendingDown className="w-4 h-4" />
+            <div className="p-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900/60">
+              <Wrench className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-xl sm:text-2xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
-              {stats.exitsToday} <span className="text-xs font-normal text-slate-400 font-sans">saídas</span>
+          <div className="mt-2.5">
+            <div className="text-xs sm:text-sm font-serif font-bold text-slate-900 dark:text-[#F3F4F6] truncate tracking-tight" title={topTool?.name || 'Nenhuma'}>
+              {topTool ? topTool.name : 'Nenhuma saída'}
             </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-mono text-[11px]">{stats.movementsToday} movimentações hoje</span>
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <Award className="w-3 h-3 text-amber-500" />
+              <span className="font-mono">{topTool ? `${topTool.timesRequested} requisições (${topTool.totalQuantityUsed} un)` : '-'}</span>
             </div>
           </div>
         </div>
 
-        {/* Critical Low Stock Card */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-amber-500/30 transition">
+        {/* Card 4: Colaborador Mais Ativo */}
+        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-indigo-500/40 transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+              <UserCheck className="w-3 h-3 text-indigo-500" />
+              Colaborador Líder
+            </span>
+            <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 rounded-lg border border-indigo-200 dark:border-indigo-900/60">
+              <Users className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <div className="text-xs sm:text-sm font-serif font-bold text-slate-900 dark:text-[#F3F4F6] truncate tracking-tight" title={topEmployee?.employeeName || 'Nenhum'}>
+              {topEmployee ? topEmployee.employeeName : 'Nenhum'}
+            </div>
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <Award className="w-3 h-3 text-indigo-500" />
+              <span className="font-mono">{topEmployee ? `${topEmployee.totalMovements} retiradas (${topEmployee.totalItemsTaken} itens)` : '-'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Estoque Crítico */}
+        <div className="col-span-2 sm:col-span-2 lg:col-span-1 p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-red-500/40 transition">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               Estoque Crítico
             </span>
-            <div className={`p-2 rounded-lg border ${alerts.length > 0 ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/60' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60'}`}>
-              {alerts.length > 0 ? <AlertOctagon className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+            <div className={`p-1.5 rounded-lg border ${alerts.length > 0 ? 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/60' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60'}`}>
+              {alerts.length > 0 ? <AlertOctagon className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-xl sm:text-2xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
+          <div className="mt-2.5">
+            <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
               {stats.criticalStockCount + stats.lowStockCount}{' '}
-              <span className="text-xs font-normal text-slate-400 font-sans">itens</span>
+              <span className="text-xs font-normal text-slate-400 font-sans">alertas</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-red-600 dark:text-red-400 font-semibold">
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-red-600 dark:text-red-400 font-medium font-mono">
               {stats.criticalStockCount > 0 ? (
-                <span className="font-mono text-[11px]">{stats.criticalStockCount} em ruptura imediata (saldo 0)</span>
+                <span>{stats.criticalStockCount} em ruptura imediata</span>
               ) : (
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium font-mono text-[11px]">Estoque 100% abastecido</span>
+                <span className="text-emerald-600 dark:text-emerald-400">Nenhum item zerado</span>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Charts Section: 2 Columns */}
+      {/* 3. Quick Barcode & SKU Fast Action Terminal */}
+      <div className="p-4 bg-slate-100/90 dark:bg-[#15181E] border border-slate-300/80 dark:border-[#262D37] rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-sm">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={terminalQuery}
+            onChange={(e) => setTerminalQuery(e.target.value)}
+            placeholder="Terminal Rápido: Digite ou bipe SKU, Código de Barras (ex: 7891117011025) ou Nome do Material..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#1A1F26] border border-slate-300 dark:border-[#2E3642] rounded-xl text-xs sm:text-sm font-sans text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        {terminalMatchedProduct && (
+          <div className="flex items-center gap-2.5 p-2 bg-amber-50 dark:bg-amber-950/50 border border-amber-300/80 dark:border-amber-800/60 rounded-xl">
+            <div className="text-xs">
+              <span className="font-bold text-slate-900 dark:text-white font-serif">{terminalMatchedProduct.name}</span>
+              <span className="ml-2 font-mono text-[11px] text-amber-700 dark:text-amber-300">
+                Saldo: <strong>{terminalMatchedProduct.currentStock} {terminalMatchedProduct.unit}</strong> • Custo: {formatCurrency(terminalMatchedProduct.costPrice)}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                onSelectProduct(terminalMatchedProduct);
+                onOpenMovementModal('SAIDA');
+              }}
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm"
+            >
+              Dar Cautela / Saída
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 4. CORE RANKINGS SECTION (DUAL SIDE-BY-SIDE PANELS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* RANKING A: FERRAMENTAS MAIS USADAS */}
+        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-slate-100 dark:border-[#232830]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20">
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                    Ranking: Ferramentas Mais Usadas
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                      {filteredTools.length} itens
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Frequência de saída, volume de empréstimos e colaborador que mais utilizou
+                  </p>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={toolCategoryFilter}
+                  onChange={(e) => setToolCategoryFilter(e.target.value)}
+                  className="px-2 py-1 text-xs bg-slate-50 dark:bg-[#1F242C] border border-slate-200 dark:border-[#2E3642] rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
+                >
+                  <option value="TODAS">Todas Categorias</option>
+                  <option value="Ferramentas">Somente Ferramentas</option>
+                  <option value="EPI">EPIs</option>
+                  <option value="Elétrica">Elétrica</option>
+                  <option value="Hidráulica">Hidráulica</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Tool Search Input */}
+            <div className="mb-3 relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={toolSearch}
+                onChange={(e) => setToolSearch(e.target.value)}
+                placeholder="Buscar ferramenta no ranking..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#1A1F26] border border-slate-200 dark:border-[#2C333E] rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            {/* Ranking List */}
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+              {filteredTools.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  Nenhuma ferramenta encontrada para os filtros selecionados.
+                </div>
+              ) : (
+                filteredTools.map((tool, idx) => {
+                  const prod = products.find((p) => p.id === tool.productId);
+                  const isGold = idx === 0;
+                  const isSilver = idx === 1;
+                  const isBronze = idx === 2;
+
+                  return (
+                    <div
+                      key={tool.productId}
+                      className={`p-3 rounded-xl border transition ${
+                        isGold
+                          ? 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-400/40 dark:border-amber-500/30'
+                          : 'bg-slate-50/80 dark:bg-[#1C2128] border-slate-200 dark:border-[#2B323D]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2.5">
+                          {/* Rank Badge */}
+                          <div
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 font-mono shadow-sm ${
+                              isGold
+                                ? 'bg-amber-500 text-slate-950 border border-amber-300'
+                                : isSilver
+                                ? 'bg-slate-300 dark:bg-slate-600 text-slate-900 dark:text-white'
+                                : isBronze
+                                ? 'bg-amber-800 text-amber-100'
+                                : 'bg-slate-200 dark:bg-[#282F3A] text-slate-600 dark:text-slate-400'
+                            }`}
+                          >
+                            {isGold ? '🥇' : isSilver ? '🥈' : isBronze ? '🥉' : `#${idx + 1}`}
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-serif font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                                {tool.name}
+                              </span>
+                              <span className="px-1.5 py-0.2 text-[9px] font-mono rounded bg-slate-200 dark:bg-[#252C36] text-slate-700 dark:text-slate-300">
+                                {tool.sku}
+                              </span>
+                            </div>
+
+                            {/* Detailed metrics */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-sans">
+                              <div>
+                                Requisições:{' '}
+                                <strong className="text-amber-700 dark:text-amber-400 font-mono">
+                                  {tool.timesRequested}x
+                                </strong>{' '}
+                                ({tool.totalQuantityUsed} {tool.unit})
+                              </div>
+                              <div>
+                                Emprestado para:{' '}
+                                <strong className="text-slate-800 dark:text-slate-200">
+                                  {tool.topEmployee}
+                                </strong>
+                              </div>
+                              <div>
+                                Saldo Atual:{' '}
+                                <strong
+                                  className={`font-mono ${
+                                    tool.currentStock === 0
+                                      ? 'text-red-500'
+                                      : tool.currentStock <= 2
+                                      ? 'text-amber-500'
+                                      : 'text-emerald-600 dark:text-emerald-400'
+                                  }`}
+                                >
+                                  {tool.currentStock} {tool.unit}
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Action Button */}
+                        <button
+                          onClick={() => {
+                            if (prod) onSelectProduct(prod);
+                            onOpenMovementModal('SAIDA');
+                          }}
+                          className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm transition active:scale-95 shrink-0"
+                          title="Dar saída / cautela desta ferramenta"
+                        >
+                          Cautela
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-[#232830] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>Rastreabilidade de Ferramentas Ativa</span>
+            <button
+              onClick={() => onNavigateTab('movements')}
+              className="text-amber-700 dark:text-amber-400 font-semibold hover:underline"
+            >
+              Ver Todas Cautelas →
+            </button>
+          </div>
+        </div>
+
+        {/* RANKING B: FUNCIONÁRIOS QUE MAIS USARAM / REQUISITARAM */}
+        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-slate-100 dark:border-[#232830]">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-500/20">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                    Ranking: Funcionários Requisitantes
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                      {filteredEmployees.length} colaboradores
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Colaboradores com maior volume de itens e ferramentas sob cautela
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Employee Search Input */}
+            <div className="mb-3 relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                placeholder="Buscar colaborador ou setor..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#1A1F26] border border-slate-200 dark:border-[#2C333E] rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Ranking List */}
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+              {filteredEmployees.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  Nenhum colaborador registrado em saídas ainda.
+                </div>
+              ) : (
+                filteredEmployees.map((emp, idx) => {
+                  const isGold = idx === 0;
+                  const isSilver = idx === 1;
+                  const isBronze = idx === 2;
+
+                  // Initials for avatar
+                  const initials = emp.employeeName
+                    .split(' ')
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase();
+
+                  return (
+                    <div
+                      key={emp.employeeName}
+                      className={`p-3 rounded-xl border transition ${
+                        isGold
+                          ? 'bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-400/40 dark:border-indigo-500/30'
+                          : 'bg-slate-50/80 dark:bg-[#1C2128] border-slate-200 dark:border-[#2B323D]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-2.5">
+                          {/* Avatar & Rank badge */}
+                          <div className="relative shrink-0">
+                            <div
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs font-mono shadow-sm ${
+                                isGold
+                                  ? 'bg-indigo-600 text-white'
+                                  : isSilver
+                                  ? 'bg-slate-600 text-white'
+                                  : isBronze
+                                  ? 'bg-amber-800 text-amber-100'
+                                  : 'bg-slate-200 dark:bg-[#282F3A] text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              {initials}
+                            </div>
+                            <span className="absolute -bottom-1 -right-1 text-[10px]">
+                              {isGold ? '🏆' : isSilver ? '🥈' : isBronze ? '🥉' : `#${idx + 1}`}
+                            </span>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-serif font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                                {emp.employeeName}
+                              </span>
+                              <span className="px-1.5 py-0.2 text-[9px] font-sans rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900">
+                                {emp.sector}
+                              </span>
+                            </div>
+
+                            {/* Detailed employee metrics */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-sans">
+                              <div>
+                                Retiradas:{' '}
+                                <strong className="text-indigo-700 dark:text-indigo-400 font-mono">
+                                  {emp.totalMovements}x
+                                </strong>{' '}
+                                ({emp.totalItemsTaken} itens)
+                              </div>
+                              <div>
+                                Ferramenta Principal:{' '}
+                                <strong className="text-slate-800 dark:text-slate-200 truncate inline-block max-w-[110px] align-bottom" title={emp.mostUsedItem}>
+                                  {emp.mostUsedItem}
+                                </strong>
+                              </div>
+                              <div>
+                                Valor Acumulado:{' '}
+                                <strong className="text-slate-900 dark:text-slate-200 font-mono">
+                                  {formatCurrency(emp.totalValueTaken)}
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Cautela button */}
+                        <button
+                          onClick={() => onOpenMovementModal('SAIDA')}
+                          className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm transition active:scale-95 shrink-0"
+                          title="Emitir nova cautela para este colaborador"
+                        >
+                          Nova Cautela
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-[#232830] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span>Controle Individual de Responsabilidade</span>
+            <button
+              onClick={() => onNavigateTab('reports')}
+              className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+            >
+              Relatório por Funcionário →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. VISUAL ANALYTICS SECTION (CHARTS) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Flow Chart: Daily Entries vs Exits Trend */}
         <div className="lg:col-span-2 p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm">
@@ -275,14 +736,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 Fluxo de Movimentação Diária
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Volume físico de Entradas vs Saídas registradas no almoxarifado
+                Volume físico de Entradas (compras) vs Saídas (cautelas e obras)
               </p>
             </div>
             <button
               onClick={() => onNavigateTab('movements')}
               className="text-xs font-serif font-bold text-amber-700 dark:text-amber-400 hover:underline"
             >
-              Ver Tabela Completa →
+              Histórico Completo →
             </button>
           </div>
 
@@ -325,7 +786,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <Area
                   type="monotone"
                   dataKey="saidas"
-                  name="Saídas (Qtd)"
+                  name="Saídas / Cautelas (Qtd)"
                   stroke="#EF4444"
                   strokeWidth={2.5}
                   fillOpacity={1}
@@ -336,179 +797,128 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Category Valuation Donut Chart */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white">
-                Patrimônio por Categoria
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Distribuição do capital estocado
-              </p>
+        {/* Sector / Department Consumption Chart */}
+        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white">
+                  Consumo por Setor / Obra
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Centros de custo com maior demanda
+                </p>
+              </div>
+            </div>
+
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sectorDistribution} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.15} />
+                  <XAxis type="number" stroke="#94a3b8" fontSize={10} />
+                  <YAxis type="category" dataKey="sector" stroke="#94a3b8" fontSize={10} width={90} tickFormatter={(v) => v.slice(0, 12)} />
+                  <Tooltip
+                    formatter={(val: any) => [`${val} unidades`, 'Total Retirado']}
+                    contentStyle={{
+                      backgroundColor: '#121519',
+                      borderColor: '#2D3440',
+                      borderRadius: '10px',
+                      color: '#F3F4F6',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Bar dataKey="count" fill="#D4AF37" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="h-56 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={categoryDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {categoryDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(val: any) => formatCurrency(Number(val))}
-                  contentStyle={{
-                    backgroundColor: '#121519',
-                    borderColor: '#2D3440',
-                    borderRadius: '10px',
-                    color: '#F3F4F6',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-2 border-t border-slate-100 dark:border-[#232830]">
-            {categoryDistribution.slice(0, 4).map((c, i) => (
-              <div key={c.name} className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 truncate">
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }}
-                />
-                <span className="truncate text-[11px]">{c.name}</span>
-              </div>
-            ))}
+          <div className="pt-2 border-t border-slate-100 dark:border-[#232830] text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Centros de custo alinhados</span>
+            <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono">100% Auditável</span>
           </div>
         </div>
       </div>
 
-      {/* Row 3: Top Consumed Items Bar Chart & Critical Alerts Quick List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Demanded Items */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white">
-                Top 5 Itens Mais Requisitados
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Itens com maior frequência de saída no período
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigateTab('reports')}
-              className="text-xs font-serif font-bold text-amber-700 dark:text-amber-400 hover:underline"
-            >
-              Curva ABC →
-            </button>
+      {/* 6. LIVE MOVEMENTS & AUDIT FEED */}
+      <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-500" />
+              Últimas Movimentações & Cautelas em Tempo Real
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Registro contínuo de entradas de notas fiscais e saídas para colaboradores
+            </p>
           </div>
-
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topConsumedItems} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
-                <XAxis dataKey="sku" stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} />
-                <Tooltip
-                  formatter={(val: any) => [`${val} unidades`, 'Total Requisitado']}
-                  contentStyle={{
-                    backgroundColor: '#121519',
-                    borderColor: '#2D3440',
-                    borderRadius: '10px',
-                    color: '#F3F4F6',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                />
-                <Bar dataKey="quantity" fill="#D4AF37" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <button
+            onClick={() => onNavigateTab('movements')}
+            className="text-xs font-serif font-bold text-amber-700 dark:text-amber-400 hover:underline"
+          >
+            Ver Todas ({movements.length}) →
+          </button>
         </div>
 
-        {/* Live Urgent Replenishment Action List */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                  <AlertOctagon className="w-4 h-4 text-red-500" />
-                  Necessidade Imediata de Reposição
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Produtos que atingiram ou romperam o ponto de pedido
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigateTab('alerts')}
-                className="text-xs font-serif font-bold text-amber-700 dark:text-amber-400 hover:underline"
-              >
-                Ver Todos ({alerts.length}) →
-              </button>
-            </div>
-
-            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-              {alerts.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  Nenhum item com estoque baixo. Todos os saldos estão saudáveis.
-                </div>
-              ) : (
-                alerts.slice(0, 4).map((alt) => {
-                  const prod = products.find((p) => p.id === alt.productId);
-                  return (
-                    <div
-                      key={alt.id}
-                      className="p-3 bg-slate-50 dark:bg-[#1F242C] border border-slate-200 dark:border-[#2B323D] rounded-xl flex items-center justify-between gap-3"
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-100 dark:bg-[#1B2027] text-slate-700 dark:text-slate-300 font-serif">
+              <tr>
+                <th className="p-2.5 rounded-l-lg">Horário</th>
+                <th className="p-2.5">Tipo</th>
+                <th className="p-2.5">Produto / Ferramenta</th>
+                <th className="p-2.5 text-right">Qtd</th>
+                <th className="p-2.5">Colaborador (Cautela)</th>
+                <th className="p-2.5">Setor / Obra</th>
+                <th className="p-2.5">Almoxarife</th>
+                <th className="p-2.5 rounded-r-lg">Doc / OS</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-[#232932]">
+              {movements.slice(0, 7).map((m) => (
+                <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-[#1B2027]/60 transition">
+                  <td className="p-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                    {formatDate(m.timestamp)}
+                  </td>
+                  <td className="p-2.5">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        m.type === 'ENTRADA'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          : m.type === 'SAIDA'
+                          ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                      }`}
                     >
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              alt.type === 'CRITICO' ? 'bg-red-600 animate-ping' : 'bg-amber-500'
-                            }`}
-                          />
-                          <span className="font-serif font-bold text-xs text-slate-900 dark:text-white">
-                            {alt.productName}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
-                          Saldo: <strong className="text-red-500">{alt.currentStock}</strong> (Mín: {alt.minStock}) • Repor:{' '}
-                          <strong className="text-amber-600 dark:text-amber-400">+{alt.suggestedReorderQuantity} un</strong>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          if (prod) onSelectProduct(prod);
-                          onOpenMovementModal('ENTRADA');
-                        }}
-                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-slate-950 text-xs font-bold rounded-lg shadow-sm whitespace-nowrap transition"
-                      >
-                        Repor (+ NF)
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100 dark:border-[#232830] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Acuracidade Geral do Almoxarifado: <strong className="font-mono text-slate-700 dark:text-slate-300">{stats.stockAccuracyPercent}%</strong></span>
-            <span className="text-amber-700 dark:text-amber-400 font-semibold font-serif">Padrão Borges & Gomes 5S</span>
-          </div>
+                      {m.type}
+                    </span>
+                  </td>
+                  <td className="p-2.5 font-semibold text-slate-900 dark:text-slate-100 max-w-[200px] truncate">
+                    {m.productName}
+                  </td>
+                  <td className="p-2.5 font-mono text-right font-bold text-slate-900 dark:text-slate-100">
+                    {m.quantity}
+                  </td>
+                  <td className="p-2.5 text-slate-800 dark:text-slate-200">
+                    {m.employeeName ? (
+                      <span className="font-semibold text-indigo-600 dark:text-indigo-400">{m.employeeName}</span>
+                    ) : (
+                      <span className="text-slate-400 italic">-</span>
+                    )}
+                  </td>
+                  <td className="p-2.5 text-slate-600 dark:text-slate-300 text-[11px]">
+                    {m.requesterSector || 'Almoxarifado'}
+                  </td>
+                  <td className="p-2.5 text-slate-600 dark:text-slate-300 text-[11px]">
+                    {m.operatorName}
+                  </td>
+                  <td className="p-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                    {m.documentNumber || '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

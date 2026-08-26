@@ -12,8 +12,15 @@ import {
   RotateCcw,
   Shield,
   FileJson,
+  User,
+  ShieldCheck,
+  LogOut,
+  LogIn,
+  KeyRound,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
+import { useAuth } from '../context/AuthContext';
+import { firebaseConfig } from '../lib/firebase';
 import { formatDate } from '../utils/exportUtils';
 
 export const SettingsBackupView: React.FC = () => {
@@ -28,6 +35,8 @@ export const SettingsBackupView: React.FC = () => {
     isSyncing,
     lastSyncTime,
   } = useInventory();
+
+  const { currentUser, userProfile, logout, isAuthenticated } = useAuth();
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -276,16 +285,70 @@ export const SettingsBackupView: React.FC = () => {
             <div className="pt-3 border-t border-slate-100 dark:border-[#262B33] flex justify-end">
               <button
                 onClick={() => {
-                  if (window.confirm('Deseja redefinir todos os dados para a amostra padrão de Borges e Gomes?')) {
+                  if (window.confirm('Deseja zerar todos os produtos, movimentações e fornecedores do almoxarifado?')) {
                     resetToDefaults();
                   }
                 }}
                 className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 font-semibold flex items-center gap-1"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Redefinir Dados de Exemplo
+                Zerar Todos os Dados do Estoque
               </button>
             </div>
+          </div>
+
+          {/* Firebase Auth & Security Card */}
+          <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200 dark:border-[#262B33] rounded-2xl shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif font-bold text-base text-slate-900 dark:text-[#F9FAFB] flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-amber-500" />
+                Firebase Auth & Controle de Acesso
+              </h3>
+              <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
+                isAuthenticated
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+              }`}>
+                {isAuthenticated ? 'AUTENTICADO' : 'SESSÃO CONVIDADO'}
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-[#1C2128] rounded-xl border border-slate-200 dark:border-[#2D3540] text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Projeto Firebase:</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{firebaseConfig.projectId}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Domínio Auth:</span>
+                <span className="font-mono text-[11px] text-slate-800 dark:text-slate-200">{firebaseConfig.authDomain}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Usuário Ativo:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {currentUser?.displayName || currentUser?.email || 'Nenhum usuário conectado'}
+                </span>
+              </div>
+              {currentUser && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-slate-400">Cargo & Nível:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                    {userProfile?.role || 'Almoxarife'} ({userProfile?.department || 'Almoxarifado Central'})
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {isAuthenticated && (
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={() => logout()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-red-200 dark:border-red-800 transition flex items-center gap-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Desconectar Sessão</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

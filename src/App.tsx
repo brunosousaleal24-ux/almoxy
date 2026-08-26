@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { InventoryProvider, useInventory } from './context/InventoryContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { StockCatalogView } from './components/StockCatalogView';
@@ -18,6 +19,8 @@ import { SettingsBackupView } from './components/SettingsBackupView';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { MovementModal } from './components/MovementModal';
 import { ProductFormModal } from './components/ProductFormModal';
+import { AuthModal } from './components/AuthModal';
+import { LoginScreen } from './components/LoginScreen';
 
 import { Product, MovementType } from './types';
 import {
@@ -30,10 +33,12 @@ import {
   BookOpen,
   Settings,
   Barcode,
+  RefreshCw,
 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { products, alerts, isOnline } = useInventory();
+  const { currentUser, userProfile, loading } = useAuth();
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -46,6 +51,8 @@ const MainAppContent: React.FC = () => {
 
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Quick Open Movement Helper
   const handleOpenMovementModal = (product?: Product, type?: MovementType) => {
@@ -78,14 +85,44 @@ const MainAppContent: React.FC = () => {
     }
   };
 
+  // 1. Loading state while checking Firebase Auth session
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-[#0E1114] text-[#E5E7EB] flex flex-col items-center justify-center p-6 font-sans">
+        <div className="flex flex-col items-center gap-4 text-center animate-fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 shadow-2xl shadow-amber-900/40">
+            <Boxes className="w-9 h-9" />
+          </div>
+          <div>
+            <h1 className="font-serif font-black text-xl text-white tracking-wider">
+              BORGES & GOMES
+            </h1>
+            <p className="text-xs text-amber-400 font-mono mt-0.5">Almoxarifado Inteligente</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-3">
+            <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
+            <span>Verificando credenciais Firebase...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Gateway Gate: Only authenticated users who are registered can access the app
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F7F7F5] dark:bg-[#0F1113] text-[#1C1E21] dark:text-[#E5E7EB] transition-colors flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-300">
       {/* Top Header */}
       <Header
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeTab={activeTab as any}
+        setActiveTab={(t) => setActiveTab(t)}
         onOpenScanner={() => setIsScannerOpen(true)}
         onOpenMovementModal={() => handleOpenMovementModal(undefined, 'ENTRADA')}
+        onOpenProductModal={() => handleOpenProductModal(undefined)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -221,14 +258,22 @@ const MainAppContent: React.FC = () => {
         }}
         initialProduct={editingProduct}
       />
+
+      {/* Firebase Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </div>
   );
 };
 
 export default function App() {
   return (
-    <InventoryProvider>
-      <MainAppContent />
-    </InventoryProvider>
+    <AuthProvider>
+      <InventoryProvider>
+        <MainAppContent />
+      </InventoryProvider>
+    </AuthProvider>
   );
 }
