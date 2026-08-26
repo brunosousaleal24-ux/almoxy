@@ -41,7 +41,7 @@ export function formatDateOnly(isoString: string): string {
 }
 
 // 1. Export Products / Inventory to Excel
-export function exportInventoryToExcel(products: Product[], companyName = 'Borges e Gomes') {
+export function exportInventoryToExcel(products: Product[], companyName = 'Borges & Gomes Engenharia') {
   const data = products.map((p) => {
     const totalValuation = p.currentStock * p.costPrice;
     let statusText = 'Normal';
@@ -69,11 +69,11 @@ export function exportInventoryToExcel(products: Product[], companyName = 'Borge
 
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Estoque Atual');
+  XLSX.utils.book_append_sheet(wb, ws, 'Estoque Central');
 
   // Add auto-width column calculation
   const colWidths = Object.keys(data[0] || {}).map((k) => ({
-    wch: Math.max(k.length, 14),
+    wch: Math.max(k.length, 16),
   }));
   ws['!cols'] = colWidths;
 
@@ -113,28 +113,33 @@ export function exportMovementsToExcel(movements: StockMovement[], title = 'Rela
 export function exportMovementsToPDF(
   movements: StockMovement[],
   periodTitle = 'Relatório Diário de Movimentação de Almoxarifado',
-  companyName = 'Borges e Gomes - Gestão de Almoxarifado'
+  companyName = 'BORGES & GOMES ENGENHARIA'
 ) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Header Background
-  doc.setFillColor(15, 23, 42); // slate-900
+  // Header Background Deep Slate
+  doc.setFillColor(14, 23, 38);
   doc.rect(0, 0, pageWidth, 28, 'F');
+
+  // Gold Accent Stripe
+  doc.setFillColor(217, 119, 6);
+  doc.rect(0, 26, pageWidth, 2, 'F');
 
   // Title & Company
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
+  doc.setFontSize(15);
   doc.setFont('helvetica', 'bold');
   doc.text(companyName.toUpperCase(), 14, 12);
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(203, 213, 225); // slate-300
-  doc.text(periodTitle, 14, 19);
+  doc.setTextColor(245, 158, 11); // amber-500
+  doc.text(`ALMOXARIFADO & GESTÃO LOGÍSTICA DE OBRAS | ${periodTitle}`, 14, 19);
 
   const issueDate = new Date().toLocaleString('pt-BR');
-  doc.text(`Emissão: ${issueDate}`, pageWidth - 14, 19, { align: 'right' });
+  doc.setTextColor(203, 213, 225);
+  doc.text(`Data de Emissão: ${issueDate}`, pageWidth - 14, 19, { align: 'right' });
 
   // Summary Metrics Bar
   const totalEntradas = movements.filter((m) => m.type === 'ENTRADA');
@@ -148,13 +153,13 @@ export function exportMovementsToPDF(
   doc.setTextColor(15, 23, 42);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text(`TOTAL DE REGISTROS: ${movements.length}`, 18, 41);
+  doc.text(`REGISTROS: ${movements.length}`, 18, 41);
   doc.setTextColor(22, 101, 52); // green-800
-  doc.text(`ENTRADAS: ${totalEntradas.length} reg. (${formatCurrency(sumEntradas)})`, 80, 41);
+  doc.text(`ENTRADAS: ${totalEntradas.length} reg. (${formatCurrency(sumEntradas)})`, 75, 41);
   doc.setTextColor(185, 28, 28); // red-700
-  doc.text(`SAÍDAS: ${totalSaidas.length} reg. (${formatCurrency(sumSaidas)})`, 160, 41);
+  doc.text(`SAÍDAS: ${totalSaidas.length} reg. (${formatCurrency(sumSaidas)})`, 155, 41);
   doc.setTextColor(30, 41, 59);
-  doc.text(`SALDO FINANCEIRO: ${formatCurrency(sumEntradas - sumSaidas)}`, 230, 41);
+  doc.text(`SALDO PERÍODO: ${formatCurrency(sumEntradas - sumSaidas)}`, 230, 41);
 
   // Table Body
   const tableData = movements.map((m) => [
@@ -177,20 +182,20 @@ export function exportMovementsToPDF(
         'Data/Hora',
         'Tipo',
         'SKU',
-        'Produto',
+        'Produto / Material',
         'Qtd',
         'Custo Unit.',
         'Valor Total',
-        'Doc/NF',
+        'Doc / NF / OS',
         'Setor Requisitante',
-        'Operador',
+        'Responsável',
       ],
     ],
     body: tableData,
     theme: 'grid',
     headStyles: {
-      fillColor: [30, 41, 59],
-      textColor: [255, 255, 255],
+      fillColor: [24, 34, 53],
+      textColor: [245, 158, 11],
       fontSize: 8,
       fontStyle: 'bold',
       halign: 'left',
@@ -226,9 +231,9 @@ export function exportMovementsToPDF(
       }
     },
     margin: { left: 14, right: 14 },
-    didDrawPage: (data) => {
+    didDrawPage: () => {
       // Footer
-      const str = `Página ${doc.getNumberOfPages()} | Borges e Gomes Almoxarifado - Documento de Controle Interno`;
+      const str = `Borges & Gomes Engenharia | Almoxarifado Central - Relatório Oficial de Conformidade | Pág. ${doc.getNumberOfPages()}`;
       doc.setFontSize(8);
       doc.setTextColor(148, 163, 184);
       doc.text(str, 14, doc.internal.pageSize.getHeight() - 8);
@@ -240,21 +245,24 @@ export function exportMovementsToPDF(
 }
 
 // 4. Export Critical Low Stock & Reorder PDF
-export function exportLowStockReportPDF(alerts: StockAlert[], products: Product[], companyName = 'Borges e Gomes') {
+export function exportLowStockReportPDF(alerts: StockAlert[], products: Product[], companyName = 'BORGES & GOMES ENGENHARIA') {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
   doc.setFillColor(185, 28, 28); // red-700
   doc.rect(0, 0, pageWidth, 24, 'F');
+  doc.setFillColor(217, 119, 6);
+  doc.rect(0, 22, pageWidth, 2, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
   doc.text(`${companyName.toUpperCase()} - ALERTA DE REPOSIÇÃO & ESTOQUE CRÍTICO`, 14, 11);
 
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Total de Itens em Atenção: ${alerts.length}`, 14, 18);
+  doc.setTextColor(254, 226, 226);
+  doc.text(`Emissão: ${new Date().toLocaleString('pt-BR')} | Total de Itens em Atenção: ${alerts.length}`, 14, 18);
 
   const totalEstimatedCost = alerts.reduce((acc, a) => acc + a.estimatedCost, 0);
 
@@ -277,19 +285,19 @@ export function exportLowStockReportPDF(alerts: StockAlert[], products: Product[
     head: [
       [
         'SKU',
-        'Produto',
+        'Produto / Material',
         'Gravidade',
         'Qtd Atual',
         'Est. Mín.',
         'Sugerido Comprar',
-        'Fornecedor',
+        'Fornecedor Homologado',
         'Custo Est.',
       ],
     ],
     body: tableData,
     theme: 'grid',
     headStyles: {
-      fillColor: [51, 65, 85],
+      fillColor: [30, 41, 59],
       textColor: [255, 255, 255],
       fontSize: 8,
       fontStyle: 'bold',

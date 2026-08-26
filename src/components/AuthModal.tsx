@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { firebaseConfig } from '../lib/firebase';
+import { BorgesGomesLogo } from './BorgesGomesLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -78,17 +79,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            <BorgesGomesLogo size="sm" variant="image" />
             <div>
-              <h2 className="font-serif font-bold text-lg text-white">
-                {currentUser ? 'Perfil de Acesso' : 'Autenticação de Usuário'}
+              <h2 className="font-serif font-bold text-base sm:text-lg text-white">
+                {currentUser ? 'Perfil de Acesso • Borges & Gomes' : 'Borges & Gomes Engenharia'}
               </h2>
               <div className="flex items-center gap-1.5 text-[11px] text-amber-300 font-mono">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Acesso Seguro Firebase</span>
+                <span>{currentUser ? 'Sessão Ativa no Almoxarifado' : 'Autenticação Segura Firebase'}</span>
               </div>
             </div>
           </div>

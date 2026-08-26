@@ -93,6 +93,7 @@ interface InventoryContextType {
   // Settings & Theme
   updateSettings: (updates: Partial<AppSettings>) => void;
   toggleTheme: () => void;
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
 
   // Backup & Sync Actions
   syncNow: () => Promise<void>;
@@ -192,7 +193,12 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+      const themeOverride = localStorage.getItem('almoxarifado_theme_v2');
+      const parsed: AppSettings = saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+      if (themeOverride && (themeOverride === 'dark' || themeOverride === 'light' || themeOverride === 'system')) {
+        parsed.theme = themeOverride;
+      }
+      return parsed;
     } catch {
       return INITIAL_SETTINGS;
     }
@@ -795,16 +801,44 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const updateSettings = useCallback((updates: Partial<AppSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...updates };
+      if (updated.theme) {
+        localStorage.setItem('almoxarifado_theme_v2', updated.theme);
+      }
       saveSettingsToFirestore(updated);
       return updated;
     });
     playBeepSound('success');
   }, [playBeepSound]);
 
+  const setTheme = useCallback((theme: 'light' | 'dark' | 'system') => {
+    setSettings((prev) => {
+      const upd = { ...prev, theme };
+      localStorage.setItem('almoxarifado_theme_v2', theme);
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (theme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (isSystemDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }
+      saveSettingsToFirestore(upd);
+      return upd;
+    });
+  }, []);
+
   const toggleTheme = useCallback(() => {
     setSettings((prev) => {
-      const nextTheme = prev.theme === 'dark' ? 'light' : 'dark';
+      const isCurrentlyDark = document.documentElement.classList.contains('dark') || prev.theme === 'dark';
+      const nextTheme = isCurrentlyDark ? 'light' : 'dark';
       const upd = { ...prev, theme: nextTheme as 'light' | 'dark' };
+      localStorage.setItem('almoxarifado_theme_v2', nextTheme);
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
       saveSettingsToFirestore(upd);
       return upd;
     });
@@ -994,6 +1028,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         applyAllSupplierPriceUpdates,
         updateSettings,
         toggleTheme,
+        setTheme,
         syncNow,
         createCloudBackup,
         exportDatabaseJson,

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --font-serif: 'Newsreader', Georgia, Cambria, serif;
@@ -58,11 +60,11 @@
   }
   
   .editorial-card {
-    @apply bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.4)];
+    @apply bg-white dark:bg-[#111620] border border-slate-200/90 dark:border-[#222D3E] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)];
   }
 
   .editorial-card-elevated {
-    @apply bg-white dark:bg-[#1C2026] border border-slate-200 dark:border-[#2E3540] shadow-lg;
+    @apply bg-white dark:bg-[#161D2A] border border-slate-200 dark:border-[#28354A] shadow-lg;
   }
 
   .editorial-gold-badge {
@@ -70,7 +72,28 @@
   }
 
   .editorial-input {
-    @apply bg-white dark:bg-[#121418] border border-slate-200 dark:border-[#2A303A] text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500/70 focus:border-amber-500/70;
+    @apply bg-white dark:bg-[#0E131C] border border-slate-200 dark:border-[#242E40] text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500/70 focus:border-amber-500/70;
+  }
+
+  /* Borges & Gomes Engineering Brand Utilities */
+  .bg-brand-gold {
+    background-color: #D97706;
+  }
+
+  .text-brand-gold {
+    color: #D97706;
+  }
+
+  .border-brand-gold {
+    border-color: rgba(217, 119, 6, 0.4);
+  }
+
+  .brand-badge-gold {
+    @apply px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30;
+  }
+
+  .brand-gradient-btn {
+    @apply bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-semibold shadow-md shadow-amber-900/20 active:scale-95 transition;
   }
 }
 

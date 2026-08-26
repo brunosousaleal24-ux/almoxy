@@ -17,16 +17,22 @@ import {
   LogOut,
   LogIn,
   KeyRound,
+  Sun,
+  Moon,
+  Monitor,
+  Palette,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { useAuth } from '../context/AuthContext';
 import { firebaseConfig } from '../lib/firebase';
 import { formatDate } from '../utils/exportUtils';
+import { BorgesGomesLogo } from './BorgesGomesLogo';
 
 export const SettingsBackupView: React.FC = () => {
   const {
     settings,
     updateSettings,
+    setTheme,
     backupHistory,
     createCloudBackup,
     exportDatabaseJson,
@@ -237,12 +243,142 @@ export const SettingsBackupView: React.FC = () => {
             </div>
           </div>
 
+          {/* Appearance & Theme Selection Card */}
+          <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200 dark:border-[#262B33] rounded-2xl shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif font-bold text-base text-slate-900 dark:text-[#F9FAFB] flex items-center gap-2">
+                <Palette className="w-5 h-5 text-amber-500" />
+                Aparência & Tema do Aplicativo (Publicação)
+              </h3>
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                {settings.theme === 'dark' ? 'MODO ESCURO' : settings.theme === 'light' ? 'MODO DIA' : 'AUTOMÁTICO'}
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Escolha se o sistema será exibido no <strong>Modo Escuro (Noturno)</strong> ou <strong>Modo Dia (Claro)</strong> quando for publicado ou acessado por outros usuários.
+            </p>
+
+            {/* 3 Interactive Theme Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {/* Option 1: Modo Dia / Claro */}
+              <button
+                type="button"
+                id="theme-select-light"
+                onClick={() => setTheme('light')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between relative group ${
+                  settings.theme === 'light'
+                    ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 ring-2 ring-amber-500/30'
+                    : 'border-slate-200 dark:border-[#2C333E] bg-slate-50/70 dark:bg-[#1C2128]/70 hover:border-slate-300 dark:hover:border-[#3C4554]'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                      <Sun className="w-4 h-4" />
+                    </div>
+                    {settings.theme === 'light' && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 ring-4 ring-amber-500/20" />
+                    )}
+                  </div>
+                  <strong className="block text-xs font-bold text-slate-900 dark:text-white font-serif">
+                    Modo Dia (Claro)
+                  </strong>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Fundo claro de alto contraste, ideal para escritórios e impressão.
+                  </p>
+                </div>
+                {settings.theme === 'light' && (
+                  <span className="mt-2.5 inline-block text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400">
+                    ✓ Ativo no Publicado
+                  </span>
+                )}
+              </button>
+
+              {/* Option 2: Modo Escuro / Noturno */}
+              <button
+                type="button"
+                id="theme-select-dark"
+                onClick={() => setTheme('dark')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between relative group ${
+                  settings.theme === 'dark'
+                    ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 ring-2 ring-amber-500/30'
+                    : 'border-slate-200 dark:border-[#2C333E] bg-slate-50/70 dark:bg-[#1C2128]/70 hover:border-slate-300 dark:hover:border-[#3C4554]'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-slate-800 text-amber-400 flex items-center justify-center">
+                      <Moon className="w-4 h-4" />
+                    </div>
+                    {settings.theme === 'dark' && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 ring-4 ring-amber-500/20" />
+                    )}
+                  </div>
+                  <strong className="block text-xs font-bold text-slate-900 dark:text-white font-serif">
+                    Modo Escuro (Noite)
+                  </strong>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Fundo grafite escuro, contraste suave para almoxarifados e tablets.
+                  </p>
+                </div>
+                {settings.theme === 'dark' && (
+                  <span className="mt-2.5 inline-block text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400">
+                    ✓ Ativo no Publicado
+                  </span>
+                )}
+              </button>
+
+              {/* Option 3: Automático / Sistema */}
+              <button
+                type="button"
+                id="theme-select-system"
+                onClick={() => setTheme('system')}
+                className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between relative group ${
+                  settings.theme === 'system'
+                    ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 ring-2 ring-amber-500/30'
+                    : 'border-slate-200 dark:border-[#2C333E] bg-slate-50/70 dark:bg-[#1C2128]/70 hover:border-slate-300 dark:hover:border-[#3C4554]'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center">
+                      <Monitor className="w-4 h-4" />
+                    </div>
+                    {settings.theme === 'system' && (
+                      <span className="w-2 h-2 rounded-full bg-amber-500 ring-4 ring-amber-500/20" />
+                    )}
+                  </div>
+                  <strong className="block text-xs font-bold text-slate-900 dark:text-white font-serif">
+                    Automático (Sistema)
+                  </strong>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                    Adapta-se ao tema do dispositivo (Windows, Mac, Android, iOS).
+                  </p>
+                </div>
+                {settings.theme === 'system' && (
+                  <span className="mt-2.5 inline-block text-[9px] font-mono font-bold text-amber-700 dark:text-amber-400">
+                    ✓ Ativo no Publicado
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Preferences Settings */}
           <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200 dark:border-[#262B33] rounded-2xl shadow-sm space-y-4">
             <h3 className="font-serif font-bold text-base text-slate-900 dark:text-[#F9FAFB] flex items-center gap-2">
               <SettingsIcon className="w-5 h-5 text-amber-500" />
               Preferências & Identidade Corporativa
             </h3>
+
+            {/* Official Logo Banner Preview */}
+            <div className="p-3.5 bg-slate-50 dark:bg-[#121519] border border-slate-200 dark:border-[#262C36] rounded-xl flex items-center justify-between">
+              <BorgesGomesLogo size="md" showSubtitle={true} />
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                Logo Principal Ativa
+              </span>
+            </div>
 
             <div className="space-y-3 text-xs">
               <div>
@@ -255,29 +391,14 @@ export const SettingsBackupView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-500 dark:text-slate-400 mb-1">Modo Noturno (Tema)</label>
-                  <select
-                    value={settings.theme}
-                    onChange={(e) => updateSettings({ theme: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/60"
-                  >
-                    <option value="light">☀️ Modo Editorial Claro</option>
-                    <option value="dark">🌙 Modo Editorial Noturno</option>
-                    <option value="system">🖥️ Seguir Sistema Operacional</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-500 dark:text-slate-400 mb-1">Galpão Padrão</label>
-                  <input
-                    type="text"
-                    value={settings.defaultWarehouse}
-                    onChange={(e) => updateSettings({ defaultWarehouse: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/60"
-                  />
-                </div>
+              <div>
+                <label className="block text-slate-500 dark:text-slate-400 mb-1">Galpão Padrão</label>
+                <input
+                  type="text"
+                  value={settings.defaultWarehouse}
+                  onChange={(e) => updateSettings({ defaultWarehouse: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500/60"
+                />
               </div>
             </div>
 

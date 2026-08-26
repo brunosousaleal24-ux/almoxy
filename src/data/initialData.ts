@@ -8,7 +8,7 @@ export const INITIAL_PRODUCTS: Product[] = [];
 export const INITIAL_MOVEMENTS: StockMovement[] = [];
 
 export const INITIAL_SETTINGS: AppSettings = {
-  companyName: 'Almoxarifado & Logística',
+  companyName: 'Borges & Gomes Engenharia',
   theme: 'light',
   autoBackup: true,
   backupIntervalHours: 4,

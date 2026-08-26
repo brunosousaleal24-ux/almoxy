@@ -1,6 +1,6 @@
 {
-  "name": "Borges e Gomes - Almoxarifado Inteligente",
-  "description": "Sistema completo de controle de estoque, movimentações diárias, alertas de estoque baixo, leitor de código de barras, relatórios em PDF/Excel, modo offline e integrações para Borges e Gomes.",
+  "name": "Borges & Gomes Engenharia",
+  "description": "Sistema Integrado de Almoxarifado, Cautelas de Ferramentas, Controle Físico de Estoque e Relatórios Executivos para Borges & Gomes Engenharia.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -222,10 +222,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight text-[#F9FAFB]">
-              Centro Integrado de Almoxarifado & Cautelas
+              Borges & Gomes Engenharia — Almoxarifado Central
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl font-sans leading-relaxed">
-              Controle unificado em 1 tela: ranking de ferramentas elétricas e equipamentos mais utilizados, colaboradores que mais retiraram materiais, acuracidade de estoque e movimentações em tempo real.
+              Sistema Integrado de Gestão de Cautelas de Ferramentas, Entradas/Saídas de Materiais de Construção, Acuracidade Física e Controle Orçamentário de Obras.
             </p>
           </div>
 

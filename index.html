@@ -3,12 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-    <meta name="description" content="An application built with Google AI Studio." />
-    <meta property="og:title" content="My Google AI Studio App" />
-    <meta property="og:description" content="An application built with Google AI Studio." />
+    <link rel="icon" type="image/jpeg" href="/logo-borges.jpg" />
+    <title>Borges & Gomes Engenharia - Almoxarifado Inteligente</title>
+    <meta name="description" content="Sistema completo de controle de estoque, movimentações, ferramentas e cautelas para Borges e Gomes." />
+    <meta property="og:title" content="Borges e Gomes - Almoxarifado Inteligente" />
+    <meta property="og:description" content="Sistema completo de controle de estoque, movimentações, ferramentas e cautelas para Borges e Gomes." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        try {
+          var savedTheme = localStorage.getItem('almoxarifado_theme_v2');
+          if (!savedTheme) {
+            var rawSettings = localStorage.getItem('almoxarifado_settings_v2');
+            if (rawSettings) {
+              var parsed = JSON.parse(rawSettings);
+              savedTheme = parsed.theme;
+            }
+          }
+          if (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..800;1,6..72,400..800&family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet" />

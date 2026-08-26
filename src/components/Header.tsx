@@ -23,6 +23,7 @@ import {
   LogIn,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
+import { BorgesGomesLogo } from './BorgesGomesLogo';
 import { useAuth } from '../context/AuthContext';
 
 export type ActiveTab =
@@ -84,24 +85,9 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Top Main Navbar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-3">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-700 via-amber-600 to-amber-900 flex items-center justify-center text-white shadow-md shadow-amber-900/20 border border-amber-500/30">
-              <Package className="w-5 h-5 text-amber-100" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-serif font-bold text-lg tracking-tight text-slate-900 dark:text-[#F3F4F6]">
-                  ALMOXARIFADO
-                </span>
-                <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-amber-100/80 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/60">
-                  PRO
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block tracking-tight font-medium">
-                Controle de Estoque • Rastreabilidade Logística • Suporte Offline
-              </p>
-            </div>
+          {/* Logo & Brand Borges & Gomes */}
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+            <BorgesGomesLogo size="md" showSubtitle={true} />
           </div>
 
           {/* Quick Actions & Status Indicators */}
@@ -141,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-open-scanner-header"
               onClick={onOpenScanner}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#1A1E24] dark:hover:bg-[#222830] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-[#2C323C] transition shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#18202C] dark:hover:bg-[#202B3B] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-[#28354A] transition shadow-sm"
               title="Abrir Leitor de Código de Barras por Câmera ou Teclado"
             >
               <Barcode className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -152,11 +138,11 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-quick-movement-header"
               onClick={onOpenMovementModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-slate-950 shadow-sm transition active:scale-95"
+              className="brand-gradient-btn flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl shadow-md"
               title="Registrar Entrada ou Saída no Estoque"
             >
               <PlusCircle className="w-4 h-4" />
-              <span className="hidden sm:inline font-bold">Movimentação</span>
+              <span className="hidden sm:inline">Movimentação</span>
             </button>
 
             {/* Notifications Dropdown */}
@@ -242,17 +228,24 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Dark / Light Mode Toggle */}
+            {/* Dark / Light Mode Toggle Button (Modo Dia / Modo Noite) */}
             <button
               id="btn-toggle-theme"
+              type="button"
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1C2128] transition border border-transparent dark:hover:border-[#2C323C]"
-              title={`Alternar para tema ${settings.theme === 'dark' ? 'claro' : 'escuro'}`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-[#1A1E24] hover:bg-slate-200 dark:hover:bg-[#242A33] text-slate-700 dark:text-slate-200 transition border border-slate-200 dark:border-[#2C333E] shadow-sm active:scale-95 cursor-pointer select-none"
+              title={settings.theme === 'dark' ? 'Clique para mudar para Modo Dia (Claro)' : 'Clique para mudar para Modo Noite (Escuro)'}
             >
               {settings.theme === 'dark' ? (
-                <Sun className="w-4 h-4 text-amber-400" />
+                <>
+                  <Sun className="w-4 h-4 text-amber-400 animate-pulse" />
+                  <span className="hidden sm:inline text-xs font-semibold font-serif text-amber-300">Modo Noite</span>
+                </>
               ) : (
-                <Moon className="w-4 h-4 text-slate-700" />
+                <>
+                  <Moon className="w-4 h-4 text-slate-700" />
+                  <span className="hidden sm:inline text-xs font-semibold font-serif text-slate-700">Modo Dia</span>
+                </>
               )}
             </button>
 
@@ -352,14 +345,14 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Secondary Navigation Tabs Bar */}
-        <nav className="flex items-center space-x-1 overflow-x-auto no-scrollbar py-2 border-t border-slate-100 dark:border-[#20252C] text-xs">
+        <nav className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-2.5 border-t border-slate-100 dark:border-[#1E2634] text-xs">
           <button
             id="nav-tab-dashboard"
             onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'dashboard'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
@@ -369,10 +362,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="nav-tab-inventory"
             onClick={() => setActiveTab('inventory')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'inventory'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -382,10 +375,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="nav-tab-movements"
             onClick={() => setActiveTab('movements')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'movements'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -395,23 +388,23 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="nav-tab-reports"
             onClick={() => setActiveTab('reports')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'reports'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            Relatórios Personalizados & BI
+            Relatórios & BI
           </button>
 
           <button
             id="nav-tab-alerts"
             onClick={() => setActiveTab('alerts')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'alerts'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -426,23 +419,23 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="nav-tab-suppliers"
             onClick={() => setActiveTab('suppliers')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'suppliers'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <Truck className="w-3.5 h-3.5" />
-            Fornecedores & APIs
+            Fornecedores
           </button>
 
           <button
             id="nav-tab-knowledge"
             onClick={() => setActiveTab('knowledge')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'knowledge'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -452,10 +445,10 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             id="nav-tab-settings"
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-slate-900 text-white dark:bg-amber-500/15 dark:text-amber-300 dark:border dark:border-amber-500/40 font-semibold shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#181C22]'
+                ? 'bg-[#0E1726] text-amber-400 dark:bg-amber-500/15 dark:text-amber-300 border border-amber-500/40 font-semibold shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#18202C]'
             }`}
           >
             <Settings className="w-3.5 h-3.5" />
