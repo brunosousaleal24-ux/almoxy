@@ -270,20 +270,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 2. Top Executive Metrics (5 Key Cards) */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Patrimônio Total */}
-        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-amber-500/40 transition">
+        <div className="p-4 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg hover:border-amber-500/50 transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
               Patrimônio Estocado
             </span>
-            <div className="p-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900/60">
+            <div className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/30">
               <DollarSign className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
+            <div className="text-lg sm:text-xl font-serif font-bold text-amber-300 tracking-tight">
               {formatCurrency(stats.totalValuation)}
             </div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
               <Layers className="w-3 h-3 text-amber-500" />
               <span className="font-mono">{stats.totalSkus} SKUs catalogados</span>
             </div>
@@ -291,20 +291,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card 2: Itens no Galpão */}
-        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-emerald-500/40 transition">
+        <div className="p-4 bg-[#0D131F] border border-emerald-500/25 rounded-2xl shadow-lg hover:border-emerald-500/50 transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
               Saldo Físico Geral
             </span>
-            <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-900/60">
+            <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/30">
               <PackageCheck className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
+            <div className="text-lg sm:text-xl font-serif font-bold text-slate-100 tracking-tight">
               {stats.totalItems.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400 font-sans">unidades</span>
             </div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-emerald-400 font-medium">
               <TrendingUp className="w-3 h-3" />
               <span className="font-mono">+{stats.entriesToday} entradas hoje</span>
             </div>
@@ -312,21 +312,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card 3: Ferramenta Mais Usada */}
-        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-amber-500/40 transition">
+        <div className="p-4 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg hover:border-amber-500/50 transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-amber-400 flex items-center gap-1">
               <Flame className="w-3 h-3 text-amber-500" />
               Ferramenta Nº 1
             </span>
-            <div className="p-1.5 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900/60">
+            <div className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/30">
               <Wrench className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-xs sm:text-sm font-serif font-bold text-slate-900 dark:text-[#F3F4F6] truncate tracking-tight" title={topTool?.name || 'Nenhuma'}>
+            <div className="text-xs sm:text-sm font-serif font-bold text-slate-100 truncate tracking-tight" title={topTool?.name || 'Nenhuma'}>
               {topTool ? topTool.name : 'Nenhuma saída'}
             </div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
               <Award className="w-3 h-3 text-amber-500" />
               <span className="font-mono">{topTool ? `${topTool.timesRequested} requisições (${topTool.totalQuantityUsed} un)` : '-'}</span>
             </div>
@@ -334,47 +334,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card 4: Colaborador Mais Ativo */}
-        <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-indigo-500/40 transition">
+        <div className="p-4 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg hover:border-amber-500/50 transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
-              <UserCheck className="w-3 h-3 text-indigo-500" />
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-amber-400 flex items-center gap-1">
+              <UserCheck className="w-3 h-3 text-amber-400" />
               Colaborador Líder
             </span>
-            <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 rounded-lg border border-indigo-200 dark:border-indigo-900/60">
+            <div className="p-1.5 bg-amber-500/10 text-amber-400 rounded-lg border border-amber-500/30">
               <Users className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-xs sm:text-sm font-serif font-bold text-slate-900 dark:text-[#F3F4F6] truncate tracking-tight" title={topEmployee?.employeeName || 'Nenhum'}>
+            <div className="text-xs sm:text-sm font-serif font-bold text-slate-100 truncate tracking-tight" title={topEmployee?.employeeName || 'Nenhum'}>
               {topEmployee ? topEmployee.employeeName : 'Nenhum'}
             </div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              <Award className="w-3 h-3 text-indigo-500" />
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
+              <Award className="w-3 h-3 text-amber-400" />
               <span className="font-mono">{topEmployee ? `${topEmployee.totalMovements} retiradas (${topEmployee.totalItemsTaken} itens)` : '-'}</span>
             </div>
           </div>
         </div>
 
         {/* Card 5: Estoque Crítico */}
-        <div className="col-span-2 sm:col-span-2 lg:col-span-1 p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm hover:border-red-500/40 transition">
+        <div className="col-span-2 sm:col-span-2 lg:col-span-1 p-4 bg-[#0D131F] border border-red-500/30 rounded-2xl shadow-lg hover:border-red-500/60 transition">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
               Estoque Crítico
             </span>
-            <div className={`p-1.5 rounded-lg border ${alerts.length > 0 ? 'bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/60' : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60'}`}>
+            <div className={`p-1.5 rounded-lg border ${alerts.length > 0 ? 'bg-red-950/60 text-red-400 border-red-500/40' : 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'}`}>
               {alerts.length > 0 ? <AlertOctagon className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
             </div>
           </div>
           <div className="mt-2.5">
-            <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-[#F3F4F6] tracking-tight">
+            <div className="text-lg sm:text-xl font-serif font-bold text-red-400 tracking-tight">
               {stats.criticalStockCount + stats.lowStockCount}{' '}
               <span className="text-xs font-normal text-slate-400 font-sans">alertas</span>
             </div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-red-600 dark:text-red-400 font-medium font-mono">
+            <div className="flex items-center gap-1 mt-1 text-[11px] text-red-400 font-medium font-mono">
               {stats.criticalStockCount > 0 ? (
                 <span>{stats.criticalStockCount} em ruptura imediata</span>
               ) : (
-                <span className="text-emerald-600 dark:text-emerald-400">Nenhum item zerado</span>
+                <span className="text-emerald-400">Nenhum item zerado</span>
               )}
             </div>
           </div>
@@ -382,24 +382,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 3. Quick Barcode & SKU Fast Action Terminal */}
-      <div className="p-4 bg-slate-100/90 dark:bg-[#15181E] border border-slate-300/80 dark:border-[#262D37] rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-sm">
+      <div className="p-4 bg-[#0D131F] border border-amber-500/30 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-lg">
         <div className="flex-1 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400/70" />
           <input
             type="text"
             value={terminalQuery}
             onChange={(e) => setTerminalQuery(e.target.value)}
             placeholder="Terminal Rápido: Digite ou bipe SKU, Código de Barras (ex: 7891117011025) ou Nome do Material..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#1A1F26] border border-slate-300 dark:border-[#2E3642] rounded-xl text-xs sm:text-sm font-sans text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500"
+            className="w-full pl-10 pr-4 py-2.5 bg-[#111827] border border-amber-500/30 rounded-xl text-xs sm:text-sm font-sans text-slate-100 placeholder-slate-400 focus:outline-none focus:border-amber-400 shadow-inner"
           />
         </div>
 
         {terminalMatchedProduct && (
-          <div className="flex items-center gap-2.5 p-2 bg-amber-50 dark:bg-amber-950/50 border border-amber-300/80 dark:border-amber-800/60 rounded-xl">
+          <div className="flex items-center gap-2.5 p-2.5 bg-amber-950/60 border border-amber-500/40 rounded-xl">
             <div className="text-xs">
-              <span className="font-bold text-slate-900 dark:text-white font-serif">{terminalMatchedProduct.name}</span>
-              <span className="ml-2 font-mono text-[11px] text-amber-700 dark:text-amber-300">
-                Saldo: <strong>{terminalMatchedProduct.currentStock} {terminalMatchedProduct.unit}</strong> • Custo: {formatCurrency(terminalMatchedProduct.costPrice)}
+              <span className="font-bold text-amber-300 font-serif">{terminalMatchedProduct.name}</span>
+              <span className="ml-2 font-mono text-[11px] text-slate-300">
+                Saldo: <strong className="text-emerald-400">{terminalMatchedProduct.currentStock} {terminalMatchedProduct.unit}</strong> • Custo: {formatCurrency(terminalMatchedProduct.costPrice)}
               </span>
             </div>
             <button
@@ -407,9 +407,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onSelectProduct(terminalMatchedProduct);
                 onOpenMovementModal('SAIDA');
               }}
-              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm"
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold whitespace-nowrap shadow-sm cursor-pointer"
             >
-              Dar Cautela / Saída
+              Dar Cautela
             </button>
           </div>
         )}
@@ -418,21 +418,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 4. CORE RANKINGS SECTION (DUAL SIDE-BY-SIDE PANELS) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* RANKING A: FERRAMENTAS MAIS USADAS */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
+        <div className="p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg flex flex-col justify-between">
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-slate-100 dark:border-[#232830]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-amber-500/20">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20">
+                <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/30">
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                  <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
                     Ranking: Ferramentas Mais Usadas
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/50">
                       {filteredTools.length} itens
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-slate-400">
                     Frequência de saída, volume de empréstimos e colaborador que mais utilizou
                   </p>
                 </div>
@@ -443,7 +443,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <select
                   value={toolCategoryFilter}
                   onChange={(e) => setToolCategoryFilter(e.target.value)}
-                  className="px-2 py-1 text-xs bg-slate-50 dark:bg-[#1F242C] border border-slate-200 dark:border-[#2E3642] rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
+                  className="px-2.5 py-1 text-xs bg-[#111827] border border-amber-500/30 rounded-lg text-slate-200 focus:outline-none focus:border-amber-400"
                 >
                   <option value="TODAS">Todas Categorias</option>
                   <option value="Ferramentas">Somente Ferramentas</option>
@@ -462,7 +462,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 value={toolSearch}
                 onChange={(e) => setToolSearch(e.target.value)}
                 placeholder="Buscar ferramenta no ranking..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#1A1F26] border border-slate-200 dark:border-[#2C333E] rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:border-amber-500"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#111827] border border-amber-500/30 rounded-lg text-slate-200 focus:outline-none focus:border-amber-400"
               />
             </div>
 
@@ -579,21 +579,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* RANKING B: FUNCIONÁRIOS QUE MAIS USARAM / REQUISITARAM */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
+        <div className="p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg flex flex-col justify-between">
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-slate-100 dark:border-[#232830]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-amber-500/20">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-500/20">
+                <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/30">
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                  <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
                     Ranking: Funcionários Requisitantes
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/50">
                       {filteredEmployees.length} colaboradores
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-slate-400">
                     Colaboradores com maior volume de itens e ferramentas sob cautela
                   </p>
                 </div>
@@ -608,7 +608,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
                 placeholder="Buscar colaborador ou setor..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#1A1F26] border border-slate-200 dark:border-[#2C333E] rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-500"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#111827] border border-amber-500/30 rounded-lg text-slate-200 focus:outline-none focus:border-amber-400"
               />
             </div>
 
@@ -729,19 +729,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 5. VISUAL ANALYTICS SECTION (CHARTS) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Flow Chart: Daily Entries vs Exits Trend */}
-        <div className="lg:col-span-2 p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm">
+        <div className="lg:col-span-2 p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white">
+              <h3 className="font-serif font-bold text-base text-white">
                 Fluxo de Movimentação Diária
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-400">
                 Volume físico de Entradas (compras) vs Saídas (cautelas e obras)
               </p>
             </div>
             <button
               onClick={() => onNavigateTab('movements')}
-              className="text-xs font-serif font-bold text-amber-700 dark:text-amber-400 hover:underline"
+              className="text-xs font-serif font-bold text-amber-400 hover:underline cursor-pointer"
             >
               Histórico Completo →
             </button>
@@ -756,8 +756,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
                   </linearGradient>
                   <linearGradient id="colorSaidas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
@@ -765,12 +765,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <YAxis stroke="#94a3b8" fontSize={11} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#121519',
-                    borderColor: '#2D3440',
+                    backgroundColor: '#0D131F',
+                    borderColor: '#F59E0B33',
                     borderRadius: '10px',
                     color: '#F3F4F6',
                     fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
+                    fontFamily: 'monospace',
                   }}
                 />
                 <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px' }} />
@@ -787,7 +787,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   type="monotone"
                   dataKey="saidas"
                   name="Saídas / Cautelas (Qtd)"
-                  stroke="#EF4444"
+                  stroke="#F59E0B"
                   strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#colorSaidas)"
@@ -798,14 +798,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Sector / Department Consumption Chart */}
-        <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm flex flex-col justify-between">
+        <div className="p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white">
+                <h3 className="font-serif font-bold text-base text-white">
                   Consumo por Setor / Obra
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-400">
                   Centros de custo com maior demanda
                 </p>
               </div>
@@ -820,41 +820,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <Tooltip
                     formatter={(val: any) => [`${val} unidades`, 'Total Retirado']}
                     contentStyle={{
-                      backgroundColor: '#121519',
-                      borderColor: '#2D3440',
+                      backgroundColor: '#0D131F',
+                      borderColor: '#F59E0B33',
                       borderRadius: '10px',
                       color: '#F3F4F6',
                       fontSize: '12px',
                     }}
                   />
-                  <Bar dataKey="count" fill="#D4AF37" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" fill="#F59E0B" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-100 dark:border-[#232830] text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
+          <div className="pt-2 border-t border-amber-500/20 text-xs text-slate-400 flex items-center justify-between">
             <span>Centros de custo alinhados</span>
-            <span className="font-semibold text-amber-600 dark:text-amber-400 font-mono">100% Auditável</span>
+            <span className="font-semibold text-amber-400 font-mono">100% Auditável</span>
           </div>
         </div>
       </div>
 
       {/* 6. LIVE MOVEMENTS & AUDIT FEED */}
-      <div className="p-5 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm">
+      <div className="p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-serif font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-500" />
+            <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" />
               Últimas Movimentações & Cautelas em Tempo Real
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-400">
               Registro contínuo de entradas de notas fiscais e saídas para colaboradores
             </p>
           </div>
           <button
             onClick={() => onNavigateTab('movements')}
-            className="text-xs font-serif font-bold text-amber-700 dark:text-amber-400 hover:underline"
+            className="text-xs font-serif font-bold text-amber-400 hover:underline cursor-pointer"
           >
             Ver Todas ({movements.length}) →
           </button>
@@ -862,7 +862,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-100 dark:bg-[#1B2027] text-slate-700 dark:text-slate-300 font-serif">
+            <thead className="bg-[#111827] text-amber-300 font-serif border-b border-amber-500/20">
               <tr>
                 <th className="p-2.5 rounded-l-lg">Horário</th>
                 <th className="p-2.5">Tipo</th>
@@ -874,45 +874,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <th className="p-2.5 rounded-r-lg">Doc / OS</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#232932]">
+            <tbody className="divide-y divide-amber-500/10">
               {movements.slice(0, 7).map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-[#1B2027]/60 transition">
-                  <td className="p-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                <tr key={m.id} className="hover:bg-[#151D2C] transition">
+                  <td className="p-2.5 font-mono text-[11px] text-slate-400">
                     {formatDate(m.timestamp)}
                   </td>
                   <td className="p-2.5">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         m.type === 'ENTRADA'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
                           : m.type === 'SAIDA'
-                          ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          ? 'bg-red-950/80 text-red-300 border border-red-500/40'
+                          : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
                       }`}
                     >
                       {m.type}
                     </span>
                   </td>
-                  <td className="p-2.5 font-semibold text-slate-900 dark:text-slate-100 max-w-[200px] truncate">
+                  <td className="p-2.5 font-semibold text-slate-100 max-w-[200px] truncate">
                     {m.productName}
                   </td>
-                  <td className="p-2.5 font-mono text-right font-bold text-slate-900 dark:text-slate-100">
+                  <td className="p-2.5 font-mono text-right font-bold text-amber-300">
                     {m.quantity}
                   </td>
-                  <td className="p-2.5 text-slate-800 dark:text-slate-200">
+                  <td className="p-2.5 text-slate-200">
                     {m.employeeName ? (
-                      <span className="font-semibold text-indigo-600 dark:text-indigo-400">{m.employeeName}</span>
+                      <span className="font-semibold text-amber-300">{m.employeeName}</span>
                     ) : (
-                      <span className="text-slate-400 italic">-</span>
+                      <span className="text-slate-500 italic">-</span>
                     )}
                   </td>
-                  <td className="p-2.5 text-slate-600 dark:text-slate-300 text-[11px]">
+                  <td className="p-2.5 text-slate-300 text-[11px]">
                     {m.requesterSector || 'Almoxarifado'}
                   </td>
-                  <td className="p-2.5 text-slate-600 dark:text-slate-300 text-[11px]">
+                  <td className="p-2.5 text-slate-300 text-[11px]">
                     {m.operatorName}
                   </td>
-                  <td className="p-2.5 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                  <td className="p-2.5 font-mono text-[11px] text-slate-400">
                     {m.documentNumber || '-'}
                   </td>
                 </tr>

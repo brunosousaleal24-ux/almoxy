@@ -12,12 +12,16 @@ import {
   MovementReason,
   ToolUsageRanking,
   EmployeeRanking,
+  ConstructionSite,
+  ToolCaution,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
   INITIAL_MOVEMENTS,
   INITIAL_SUPPLIERS,
   INITIAL_SETTINGS,
+  INITIAL_CONSTRUCTION_SITES,
+  INITIAL_CAUTIONS,
 } from '../data/initialData';
 import {
   firebaseConfig,
@@ -58,6 +62,25 @@ interface InventoryContextType {
   // Rankings
   toolsRanking: ToolUsageRanking[];
   employeeRanking: EmployeeRanking[];
+
+  // Obras & Cautelas
+  constructionSites: ConstructionSite[];
+  toolCautions: ToolCaution[];
+  addConstructionSite: (site: Omit<ConstructionSite, 'id'>) => ConstructionSite;
+  updateConstructionSite: (id: string, updates: Partial<ConstructionSite>) => void;
+  deleteConstructionSite: (id: string) => void;
+  checkoutToolCaution: (data: {
+    toolId: string;
+    employeeName: string;
+    employeeRole: string;
+    employeeSector: string;
+    constructionSiteId: string;
+    expectedReturnDate: string;
+    conditionOnCheckout: 'NOVO' | 'BOM' | 'REGULAR';
+    operatorCheckout: string;
+    notes?: string;
+  }) => { success: boolean; caution?: ToolCaution; error?: string };
+  returnToolCaution: (cautionId: string, conditionOnReturn: 'BOM' | 'REGULAR' | 'AVARIADO' | 'PERDIDO', operatorReturn: string, notes?: string) => { success: boolean; error?: string };
 
   // Firebase
   firebaseStatus: FirebaseStatusInfo;
@@ -113,6 +136,8 @@ const STORAGE_KEYS = {
   PRODUCTS: 'almoxarifado_products_v2',
   MOVEMENTS: 'almoxarifado_movements_v2',
   SUPPLIERS: 'almoxarifado_suppliers_v2',
+  CONSTRUCTION_SITES: 'almoxarifado_sites_v2',
+  TOOL_CAUTIONS: 'almoxarifado_cautions_v2',
   SETTINGS: 'almoxarifado_settings_v2',
   BACKUPS: 'almoxarifado_backups_v2',
   SYNC_QUEUE: 'almoxarifado_sync_queue_v2',
@@ -190,6 +215,24 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   });
 
+  const [constructionSites, setConstructionSites] = useState<ConstructionSite[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CONSTRUCTION_SITES);
+      return saved ? JSON.parse(saved) : INITIAL_CONSTRUCTION_SITES;
+    } catch {
+      return INITIAL_CONSTRUCTION_SITES;
+    }
+  });
+
+  const [toolCautions, setToolCautions] = useState<ToolCaution[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.TOOL_CAUTIONS);
+      return saved ? JSON.parse(saved) : INITIAL_CAUTIONS;
+    } catch {
+      return INITIAL_CAUTIONS;
+    }
+  });
+
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -247,6 +290,14 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
   }, [suppliers]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.CONSTRUCTION_SITES, JSON.stringify(constructionSites));
+  }, [constructionSites]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.TOOL_CAUTIONS, JSON.stringify(toolCautions));
+  }, [toolCautions]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
@@ -728,6 +779,161 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [products, isOnline, playBeepSound]
   );
 
+  // Construction Site Actions
+  const addConstructionSite = useCallback((siteData: Omit<ConstructionSite, 'id'>) => {
+    const newSite: ConstructionSite = {
+      ...siteData,
+      id: `site-${Date.now()}`,
+    };
+    setConstructionSites((prev) => [...prev, newSite]);
+    playBeepSound('success');
+    return newSite;
+  }, [playBeepSound]);
+
+  const updateConstructionSite = useCallback((id: string, updates: Partial<ConstructionSite>) => {
+    setConstructionSites((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+    );
+    playBeepSound('success');
+  }, [playBeepSound]);
+
+  const deleteConstructionSite = useCallback((id: string) => {
+    setConstructionSites((prev) => prev.filter((s) => s.id !== id));
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  // Tool Caution Actions (Cautelas de Ferramentas)
+  const checkoutToolCaution = useCallback(
+    (data: {
+      toolId: string;
+      employeeName: string;
+      employeeRole: string;
+      employeeSector: string;
+      constructionSiteId: string;
+      expectedReturnDate: string;
+      conditionOnCheckout: 'NOVO' | 'BOM' | 'REGULAR';
+      operatorCheckout: string;
+      notes?: string;
+    }) => {
+      const tool = products.find((p) => p.id === data.toolId);
+      if (!tool) {
+        return { success: false, error: 'Ferramenta não encontrada no catálogo.' };
+      }
+      if (tool.currentStock < 1) {
+        return { success: false, error: `Ferramenta "${tool.name}" sem saldo em estoque para cautela.` };
+      }
+
+      const site = constructionSites.find((s) => s.id === data.constructionSiteId);
+      const siteName = site ? site.name : 'Almoxarifado Central';
+
+      const now = new Date().toISOString();
+      const cautionId = `caut-${Date.now()}`;
+
+      const newCaution: ToolCaution = {
+        id: cautionId,
+        toolId: tool.id,
+        toolName: tool.name,
+        toolSku: tool.sku,
+        employeeName: data.employeeName.trim(),
+        employeeRole: data.employeeRole.trim(),
+        employeeSector: data.employeeSector.trim(),
+        constructionSiteId: data.constructionSiteId,
+        constructionSiteName: siteName,
+        checkoutDate: now,
+        expectedReturnDate: data.expectedReturnDate,
+        status: 'EM_USO',
+        conditionOnCheckout: data.conditionOnCheckout,
+        operatorCheckout: data.operatorCheckout || 'Almoxarife',
+        notes: data.notes?.trim(),
+      };
+
+      // Register internal SAIDA for caution
+      const moveResult = registerMovement({
+        productId: tool.id,
+        type: 'SAIDA',
+        reason: 'REQUISICAO_SETOR',
+        quantity: 1,
+        documentNumber: `CAUTELA-${cautionId.slice(-6).toUpperCase()}`,
+        requesterSector: data.employeeSector || siteName,
+        operatorName: data.operatorCheckout || 'Almoxarife',
+        employeeName: data.employeeName,
+        notes: `Cautela de Ferramenta p/ ${data.employeeName} (${siteName})`,
+      });
+
+      if (!moveResult.success) {
+        return { success: false, error: moveResult.error || 'Erro ao registrar saída de estoque.' };
+      }
+
+      setToolCautions((prev) => [newCaution, ...prev]);
+      playBeepSound('success');
+      return { success: true, caution: newCaution };
+    },
+    [products, constructionSites, registerMovement, playBeepSound]
+  );
+
+  const returnToolCaution = useCallback(
+    (cautionId: string, conditionOnReturn: 'BOM' | 'REGULAR' | 'AVARIADO' | 'PERDIDO', operatorReturn: string, notes?: string) => {
+      const caution = toolCautions.find((c) => c.id === cautionId);
+      if (!caution) {
+        return { success: false, error: 'Registro de cautela não encontrado.' };
+      }
+      if (caution.status === 'DEVOLVIDA') {
+        return { success: false, error: 'Esta ferramenta já foi devolvida anteriormente.' };
+      }
+
+      const now = new Date().toISOString();
+      const isDamagedOrLost = conditionOnReturn === 'AVARIADO' || conditionOnReturn === 'PERDIDO';
+
+      // Update caution record
+      setToolCautions((prev) =>
+        prev.map((c) =>
+          c.id === cautionId
+            ? {
+                ...c,
+                status: isDamagedOrLost ? 'AVARIADA' : 'DEVOLVIDA',
+                conditionOnReturn,
+                returnedDate: now,
+                operatorReturn: operatorReturn || 'Almoxarife',
+                notes: notes ? `${c.notes || ''} [Devolução]: ${notes}`.trim() : c.notes,
+              }
+            : c
+        )
+      );
+
+      // If returned in good condition, add stock back (ENTRADA - DEVOLUCAO)
+      if (conditionOnReturn === 'BOM' || conditionOnReturn === 'REGULAR') {
+        registerMovement({
+          productId: caution.toolId,
+          type: 'ENTRADA',
+          reason: 'DEVOLUCAO',
+          quantity: 1,
+          documentNumber: `DEV-CAUTELA-${caution.id.slice(-6).toUpperCase()}`,
+          requesterSector: caution.constructionSiteName,
+          operatorName: operatorReturn || 'Almoxarife',
+          employeeName: caution.employeeName,
+          notes: `Devolução de Cautela (${conditionOnReturn})`,
+        });
+      } else {
+        // If damaged/lost, register incident movement
+        registerMovement({
+          productId: caution.toolId,
+          type: 'SAIDA',
+          reason: 'PERDA_AVARIA',
+          quantity: 1,
+          documentNumber: `AVARIA-${caution.id.slice(-6).toUpperCase()}`,
+          requesterSector: caution.constructionSiteName,
+          operatorName: operatorReturn || 'Almoxarife',
+          employeeName: caution.employeeName,
+          notes: `Avaria/Perda em Cautela: ${conditionOnReturn}. ${notes || ''}`,
+        });
+      }
+
+      playBeepSound('success');
+      return { success: true };
+    },
+    [toolCautions, registerMovement, playBeepSound]
+  );
+
   // Supplier Actions
   const addSupplier = useCallback((supplierData: Omit<Supplier, 'id'>) => {
     const newSupplier: Supplier = {
@@ -1014,6 +1220,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         stats,
         toolsRanking,
         employeeRanking,
+        constructionSites,
+        toolCautions,
+        addConstructionSite,
+        updateConstructionSite,
+        deleteConstructionSite,
+        checkoutToolCaution,
+        returnToolCaution,
         firebaseStatus,
         syncWithFirebase,
         addProduct,

@@ -182,6 +182,40 @@ export interface UserProfile {
   lastLogin?: string;
 }
 
+export interface ConstructionSite {
+  id: string;
+  name: string;
+  code: string;
+  address: string;
+  manager: string;
+  status: 'EM_ANDAMENTO' | 'PLANEJAMENTO' | 'CONCLUIDA' | 'PAUSADA';
+  budgetTotal: number;
+  consumedValue: number;
+  startDate: string;
+  expectedEndDate: string;
+}
+
+export interface ToolCaution {
+  id: string;
+  toolId: string;
+  toolName: string;
+  toolSku: string;
+  employeeName: string;
+  employeeRole: string;
+  employeeSector: string;
+  constructionSiteId: string;
+  constructionSiteName: string;
+  checkoutDate: string; // ISO
+  expectedReturnDate: string;
+  returnedDate?: string;
+  status: 'EM_USO' | 'DEVOLVIDA' | 'ATRASADA' | 'AVARIADA';
+  conditionOnCheckout: 'NOVO' | 'BOM' | 'REGULAR';
+  conditionOnReturn?: 'BOM' | 'REGULAR' | 'AVARIADO' | 'PERDIDO';
+  notes?: string;
+  operatorCheckout: string;
+  operatorReturn?: string;
+}
+
 export interface InventoryStats {
   totalItems: number;
   totalSkus: number;

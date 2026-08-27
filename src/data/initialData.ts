@@ -1,4 +1,4 @@
-import { Product, StockMovement, Supplier, AppSettings } from '../types';
+import { Product, StockMovement, Supplier, AppSettings, ConstructionSite, ToolCaution } from '../types';
 
 // Zerado para início de operação do almoxarifado
 export const INITIAL_SUPPLIERS: Supplier[] = [];
@@ -6,6 +6,59 @@ export const INITIAL_SUPPLIERS: Supplier[] = [];
 export const INITIAL_PRODUCTS: Product[] = [];
 
 export const INITIAL_MOVEMENTS: StockMovement[] = [];
+
+export const INITIAL_CONSTRUCTION_SITES: ConstructionSite[] = [
+  {
+    id: 'obra-skyline',
+    name: 'Edifício Residencial Skyline Tower',
+    code: 'OBR-001',
+    address: 'Av. Paulista, 1820 - Bela Vista, SP',
+    manager: 'Eng. Roberto Albuquerque',
+    status: 'EM_ANDAMENTO',
+    budgetTotal: 450000.0,
+    consumedValue: 128450.0,
+    startDate: '2026-01-15',
+    expectedEndDate: '2027-06-30',
+  },
+  {
+    id: 'obra-aurora',
+    name: 'Centro Comercial Aurora Plaza',
+    code: 'OBR-002',
+    address: 'Rua das Flores, 450 - Moema, SP',
+    manager: 'Eng. Beatriz Siqueira',
+    status: 'EM_ANDAMENTO',
+    budgetTotal: 820000.0,
+    consumedValue: 312800.0,
+    startDate: '2025-08-01',
+    expectedEndDate: '2026-12-15',
+  },
+  {
+    id: 'obra-galpao-sul',
+    name: 'Galpão Logístico & Centro de Distribuição Sul',
+    code: 'OBR-003',
+    address: 'Rodovia dos Imigrantes, KM 28 - Diadema, SP',
+    manager: 'Eng. Carlos Gomes',
+    status: 'PLANEJAMENTO',
+    budgetTotal: 1250000.0,
+    consumedValue: 45000.0,
+    startDate: '2026-09-01',
+    expectedEndDate: '2027-11-30',
+  },
+  {
+    id: 'obra-cond-paraiso',
+    name: 'Condomínio Reserva do Paraíso',
+    code: 'OBR-004',
+    address: 'Estrada do Paraíso, 1200 - Cotia, SP',
+    manager: 'Eng. Fernando Borges',
+    status: 'CONCLUIDA',
+    budgetTotal: 380000.0,
+    consumedValue: 374200.0,
+    startDate: '2024-03-10',
+    expectedEndDate: '2025-12-20',
+  },
+];
+
+export const INITIAL_CAUTIONS: ToolCaution[] = [];
 
 export const INITIAL_SETTINGS: AppSettings = {
   companyName: 'Borges & Gomes Engenharia',

@@ -15,6 +15,8 @@
     letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #080C14;
+    color: #E2E8F0;
   }
 
   h1, h2, h3, h4, .font-serif {
@@ -30,26 +32,26 @@
   }
 }
 
-/* Editorial Scrollbar */
+/* Editorial & Command Center Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #080C14;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(140, 145, 155, 0.25);
+  background: rgba(217, 119, 6, 0.35);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(140, 145, 155, 0.45);
+  background: rgba(217, 119, 6, 0.65);
 }
 
-/* Custom Utilities for Editorial Aesthetic */
+/* Custom Utilities for Dark Gold Command Center */
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -59,20 +61,21 @@
     scrollbar-width: none;
   }
   
+  /* Executive Dark Gold Cards */
   .editorial-card {
-    @apply bg-white dark:bg-[#111620] border border-slate-200/90 dark:border-[#222D3E] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)];
+    @apply bg-[#0D131F]/90 dark:bg-[#0D131F]/95 border border-amber-500/20 dark:border-amber-500/25 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md;
   }
 
   .editorial-card-elevated {
-    @apply bg-white dark:bg-[#161D2A] border border-slate-200 dark:border-[#28354A] shadow-lg;
+    @apply bg-[#111827]/95 dark:bg-[#111827]/95 border border-amber-500/35 shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-lg;
   }
 
   .editorial-gold-badge {
-    @apply bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60;
+    @apply bg-amber-500/15 text-amber-300 border border-amber-500/40;
   }
 
   .editorial-input {
-    @apply bg-white dark:bg-[#0E131C] border border-slate-200 dark:border-[#242E40] text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500/70 focus:border-amber-500/70;
+    @apply bg-[#080D16] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500;
   }
 
   /* Borges & Gomes Engineering Brand Utilities */
@@ -81,19 +84,34 @@
   }
 
   .text-brand-gold {
-    color: #D97706;
+    color: #F59E0B;
   }
 
   .border-brand-gold {
-    border-color: rgba(217, 119, 6, 0.4);
+    border-color: rgba(245, 158, 11, 0.35);
   }
 
   .brand-badge-gold {
-    @apply px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30;
+    @apply px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded bg-amber-500/15 text-amber-300 border border-amber-500/40;
   }
 
   .brand-gradient-btn {
-    @apply bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-semibold shadow-md shadow-amber-900/20 active:scale-95 transition;
+    @apply bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold shadow-lg shadow-amber-950/40 active:scale-95 transition;
+  }
+
+  /* Command Center Glow and Radar pulses */
+  .gold-glow {
+    box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.25);
+  }
+
+  .gold-glow-lg {
+    box-shadow: 0 0 35px -5px rgba(245, 158, 11, 0.4);
+  }
+
+  .dark-command-panel {
+    background: linear-gradient(135deg, rgba(13, 19, 31, 0.95) 0%, rgba(8, 13, 22, 0.98) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.25);
   }
 }
+
 

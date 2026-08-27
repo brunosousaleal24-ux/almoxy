@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { InventoryProvider, useInventory } from './context/InventoryContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
@@ -15,6 +16,8 @@ import { AlertsView } from './components/AlertsView';
 import { SuppliersView } from './components/SuppliersView';
 import { KnowledgeBaseView } from './components/KnowledgeBaseView';
 import { SettingsBackupView } from './components/SettingsBackupView';
+import { CautelasView } from './components/CautelasView';
+import { ConstructionSitesView } from './components/ConstructionSitesView';
 
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { MovementModal } from './components/MovementModal';
@@ -34,6 +37,7 @@ import {
   Settings,
   Barcode,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -71,10 +75,8 @@ const MainAppContent: React.FC = () => {
   const handleBarcodeScanned = (code: string) => {
     const matchedProduct = products.find((p) => p.barcode === code || p.sku.toLowerCase() === code.toLowerCase());
     if (matchedProduct) {
-      // Open movement directly or view
       handleOpenMovementModal(matchedProduct, 'ENTRADA');
     } else {
-      // Offer to register new product with this barcode
       if (
         window.confirm(
           `Código de barras "${code}" não cadastrado no Almoxarifado Borges & Gomes. Deseja cadastrar um novo produto agora?`
@@ -88,20 +90,20 @@ const MainAppContent: React.FC = () => {
   // 1. Loading state while checking Firebase Auth session
   if (loading) {
     return (
-      <div className="min-h-screen w-full bg-[#0E1114] text-[#E5E7EB] flex flex-col items-center justify-center p-6 font-sans">
+      <div className="min-h-screen w-full bg-[#070A0F] text-[#E5E7EB] flex flex-col items-center justify-center p-6 font-sans">
         <div className="flex flex-col items-center gap-4 text-center animate-fade-in">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 shadow-2xl shadow-amber-900/40">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-600 flex items-center justify-center text-slate-950 shadow-2xl shadow-amber-950/60 border border-amber-400/40">
             <Boxes className="w-9 h-9" />
           </div>
           <div>
             <h1 className="font-serif font-black text-xl text-white tracking-wider">
               BORGES & GOMES
             </h1>
-            <p className="text-xs text-amber-400 font-mono mt-0.5">Almoxarifado Inteligente</p>
+            <p className="text-xs text-amber-400 font-mono mt-0.5">Centro de Comando Dark Gold</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-3">
             <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
-            <span>Verificando credenciais Firebase...</span>
+            <span>Sincronizando ambiente executivo...</span>
           </div>
         </div>
       </div>
@@ -114,7 +116,13 @@ const MainAppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F7F5] dark:bg-[#0F1113] text-[#1C1E21] dark:text-[#E5E7EB] transition-colors flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-300">
+    <div className="min-h-screen bg-[#080C14] text-[#E2E8F0] flex flex-col font-sans selection:bg-amber-500/25 selection:text-amber-300 relative overflow-x-hidden">
+      {/* Background Ambient Glows */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-10 left-1/4 w-96 h-96 bg-amber-600/5 rounded-full blur-3xl" />
+      </div>
+
       {/* Top Header */}
       <Header
         activeTab={activeTab as any}
@@ -125,51 +133,66 @@ const MainAppContent: React.FC = () => {
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12">
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            onOpenScanner={() => setIsScannerOpen(true)}
-            onOpenMovementModal={(type) => handleOpenMovementModal(undefined, type)}
-            onSelectProduct={(prod) => setSelectedProductForMovement(prod)}
-            onNavigateTab={(tab) => setActiveTab(tab)}
-          />
-        )}
+      {/* Main Content Area with Framer Motion Animation */}
+      <main className="flex-1 w-full max-w-[1720px] mx-auto px-3 sm:px-5 lg:px-6 pt-5 pb-16 relative z-10">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            className="w-full"
+          >
+            {activeTab === 'dashboard' && (
+              <DashboardView
+                onOpenScanner={() => setIsScannerOpen(true)}
+                onOpenMovementModal={(type) => handleOpenMovementModal(undefined, type)}
+                onSelectProduct={(prod) => setSelectedProductForMovement(prod)}
+                onNavigateTab={(tab) => setActiveTab(tab)}
+              />
+            )}
 
-        {activeTab === 'inventory' && (
-          <StockCatalogView
-            onOpenProductModal={(p) => handleOpenProductModal(p)}
-            onOpenMovementModal={(p, type) => handleOpenMovementModal(p, type)}
-          />
-        )}
+            {activeTab === 'inventory' && (
+              <StockCatalogView
+                onOpenProductModal={(p) => handleOpenProductModal(p)}
+                onOpenMovementModal={(p, type) => handleOpenMovementModal(p, type)}
+              />
+            )}
 
-        {activeTab === 'movements' && (
-          <MovementsView
-            onOpenMovementModal={(type) => handleOpenMovementModal(undefined, type)}
-          />
-        )}
+            {activeTab === 'movements' && (
+              <MovementsView
+                onOpenMovementModal={(type) => handleOpenMovementModal(undefined, type)}
+              />
+            )}
 
-        {activeTab === 'reports' && <ReportsView />}
+            {activeTab === 'cautions' && <CautelasView />}
 
-        {activeTab === 'alerts' && (
-          <AlertsView
-            onOpenMovementModal={(p, type) => handleOpenMovementModal(p, type)}
-          />
-        )}
+            {activeTab === 'construction-sites' && <ConstructionSitesView />}
 
-        {activeTab === 'suppliers' && <SuppliersView />}
+            {activeTab === 'reports' && <ReportsView />}
 
-        {activeTab === 'knowledge' && <KnowledgeBaseView />}
+            {activeTab === 'alerts' && (
+              <AlertsView
+                onOpenMovementModal={(p, type) => handleOpenMovementModal(p, type)}
+              />
+            )}
 
-        {activeTab === 'settings' && <SettingsBackupView />}
+            {activeTab === 'suppliers' && <SuppliersView />}
+
+            {activeTab === 'knowledge' && <KnowledgeBaseView />}
+
+            {activeTab === 'settings' && <SettingsBackupView />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation for Small Devices */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#FFFFFF]/95 dark:bg-[#14171B]/95 backdrop-blur-md border-t border-slate-200 dark:border-[#262B33] px-2 py-1.5 flex items-center justify-around shadow-lg">
+      {/* Mobile Bottom Navigation - Dark Gold Command Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#090D17]/95 backdrop-blur-xl border-t border-amber-500/30 px-2 py-1.5 flex items-center justify-around shadow-2xl">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition ${
-            activeTab === 'dashboard' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : 'text-slate-500 dark:text-slate-400'
+            activeTab === 'dashboard' ? 'text-amber-400 font-black' : 'text-slate-400'
           }`}
         >
           <LayoutDashboard className="w-4 h-4" />
@@ -179,7 +202,7 @@ const MainAppContent: React.FC = () => {
         <button
           onClick={() => setActiveTab('inventory')}
           className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition ${
-            activeTab === 'inventory' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : 'text-slate-500 dark:text-slate-400'
+            activeTab === 'inventory' ? 'text-amber-400 font-black' : 'text-slate-400'
           }`}
         >
           <Boxes className="w-4 h-4" />
@@ -188,7 +211,7 @@ const MainAppContent: React.FC = () => {
 
         <button
           onClick={() => setIsScannerOpen(true)}
-          className="flex flex-col items-center justify-center -mt-5 w-12 h-12 rounded-full bg-gradient-to-tr from-amber-600 to-amber-500 text-white shadow-lg shadow-amber-600/40 active:scale-95 transition border-2 border-[#FFFFFF] dark:border-[#0F1113]"
+          className="flex flex-col items-center justify-center -mt-5 w-12 h-12 rounded-full bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-950/60 active:scale-95 transition border-2 border-[#090D17]"
         >
           <Barcode className="w-6 h-6" />
         </button>
@@ -196,7 +219,7 @@ const MainAppContent: React.FC = () => {
         <button
           onClick={() => setActiveTab('movements')}
           className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition ${
-            activeTab === 'movements' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : 'text-slate-500 dark:text-slate-400'
+            activeTab === 'movements' ? 'text-amber-400 font-black' : 'text-slate-400'
           }`}
         >
           <ArrowLeftRight className="w-4 h-4" />
@@ -206,7 +229,7 @@ const MainAppContent: React.FC = () => {
         <button
           onClick={() => setActiveTab('reports')}
           className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg text-[10px] uppercase font-bold tracking-wider transition ${
-            activeTab === 'reports' ? 'text-amber-600 dark:text-amber-400 font-extrabold' : 'text-slate-500 dark:text-slate-400'
+            activeTab === 'reports' ? 'text-amber-400 font-black' : 'text-slate-400'
           }`}
         >
           <FileBarChart2 className="w-4 h-4" />
@@ -214,24 +237,24 @@ const MainAppContent: React.FC = () => {
         </button>
       </nav>
 
-      {/* Footer / Offline Status Indicator */}
-      <footer className="mt-auto border-t border-slate-200 dark:border-[#22272E] py-4 text-center text-xs text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-[#121519]/50">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      {/* Footer Dark Gold */}
+      <footer className="mt-auto border-t border-amber-500/20 py-4 text-center text-xs text-slate-400 bg-[#070A12]/90 backdrop-blur-md relative z-10">
+        <div className="w-full max-w-[1720px] mx-auto px-3 sm:px-5 lg:px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-slate-800 dark:text-slate-200 tracking-wide">BORGES & GOMES</span>
-            <span className="text-slate-300 dark:text-slate-700">•</span>
-            <span className="text-[11px] font-mono text-slate-500">Almoxarifado Enterprise v2.4</span>
+            <span className="font-serif font-bold text-white tracking-wide">BORGES & GOMES</span>
+            <span className="text-amber-500/60">•</span>
+            <span className="text-[11px] font-mono text-amber-300/80">Centro de Comando Dark Gold v3.0</span>
           </div>
 
           <div className="flex items-center gap-3 text-[11px]">
             <span>
-              Rede:{' '}
-              <strong className={isOnline ? 'text-emerald-600 dark:text-emerald-400 font-mono' : 'text-amber-600 dark:text-amber-400 font-mono'}>
-                {isOnline ? '● Online & Sincronizado' : '○ Offline Local'}
+              Telemetria:{' '}
+              <strong className={isOnline ? 'text-emerald-400 font-mono' : 'text-amber-400 font-mono'}>
+                {isOnline ? '● Firebase Cloud Firestore Conectado' : '○ Operação Local Offline'}
               </strong>
             </span>
-            <span className="text-slate-300 dark:text-slate-700">•</span>
-            <span className="tracking-wider uppercase text-[10px] font-medium text-slate-500">Rastreabilidade & Curva ABC</span>
+            <span className="text-amber-500/60">•</span>
+            <span className="tracking-wider uppercase text-[10px] font-medium text-slate-400">Engenharia & Rastreabilidade</span>
           </div>
         </div>
       </footer>
