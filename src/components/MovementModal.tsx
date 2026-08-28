@@ -33,7 +33,7 @@ export const MovementModal: React.FC<MovementModalProps> = ({
   initialProduct = null,
   initialType = 'ENTRADA',
 }) => {
-  const { products, registerMovement } = useInventory();
+  const { products, employees, registerMovement } = useInventory();
   const { currentUser, userProfile } = useAuth();
 
   const [type, setType] = useState<MovementType>(initialType);
@@ -465,11 +465,33 @@ export const MovementModal: React.FC<MovementModalProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="Nome do profissional que retirou"
+                  list="movement-employees-list"
+                  placeholder="Nome ou matrícula do colaborador"
                   value={employeeName}
-                  onChange={(e) => setEmployeeName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEmployeeName(val);
+                    const matched = employees.find(
+                      (emp) =>
+                        emp.name.toLowerCase() === val.toLowerCase() ||
+                        emp.registrationNumber.toLowerCase() === val.toLowerCase()
+                    );
+                    if (matched) {
+                      setEmployeeName(matched.name);
+                      if (matched.sector) setRequesterSector(matched.sector);
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1A1E24] border border-slate-200 dark:border-[#2C333E] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
                 />
+                <datalist id="movement-employees-list">
+                  {employees
+                    .filter((emp) => emp.active)
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.name}>
+                        {emp.registrationNumber} — {emp.role} ({emp.sector})
+                      </option>
+                    ))}
+                </datalist>
               </div>
             </div>
 

@@ -24,7 +24,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { Product, StockMovement, Supplier, AppSettings } from '../types';
+import { Product, StockMovement, Supplier, AppSettings, Employee } from '../types';
 
 // Firebase configuration provided for contrupro-10f13
 export const firebaseConfig = {
@@ -187,6 +187,19 @@ export async function saveSupplierToFirestore(supplier: Supplier) {
     await setDoc(ref, supplier, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `suppliers/${supplier.id}`);
+  }
+}
+
+// Save single employee to Firestore
+export async function saveEmployeeToFirestore(employee: Employee) {
+  try {
+    const ref = doc(db, 'employees', employee.id);
+    await setDoc(ref, {
+      ...employee,
+      _updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `employees/${employee.id}`);
   }
 }
 

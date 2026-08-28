@@ -41,6 +41,11 @@ import {
   Flame,
   UserCheck,
   Building,
+  SlidersHorizontal,
+  Zap,
+  Boxes,
+  HardHat,
+  ChevronRight,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { formatCurrency, formatDate, exportInventoryToExcel, exportMovementsToPDF } from '../utils/exportUtils';
@@ -82,10 +87,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     isSyncing,
   } = useInventory();
 
-  // Search & Filter state for Rankings
+  // Search, Category, and Sorting state for Tools Ranking Dashboard
   const [toolSearch, setToolSearch] = useState('');
   const [toolCategoryFilter, setToolCategoryFilter] = useState<string>('TODAS');
-  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [toolSortBy, setToolSortBy] = useState<'REQUESTS' | 'QUANTITY' | 'VALUE' | 'STOCK_LOW' | 'STOCK_HIGH'>('REQUESTS');
 
   // Quick SKU / Barcode Terminal search
   const [terminalQuery, setTerminalQuery] = useState('');
@@ -150,26 +155,74 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }));
   }, [products]);
 
-  // Filtered Tools Ranking
+  // Filtered & Sorted Tools for the Ranking Dashboard
   const filteredTools = useMemo(() => {
-    return toolsRanking.filter((t) => {
+    const list = toolsRanking.filter((t) => {
       const matchSearch =
         t.name.toLowerCase().includes(toolSearch.toLowerCase()) ||
-        t.sku.toLowerCase().includes(toolSearch.toLowerCase());
+        t.sku.toLowerCase().includes(toolSearch.toLowerCase()) ||
+        t.topEmployee.toLowerCase().includes(toolSearch.toLowerCase()) ||
+        t.topSector.toLowerCase().includes(toolSearch.toLowerCase());
       const matchCat = toolCategoryFilter === 'TODAS' || t.category === toolCategoryFilter;
       return matchSearch && matchCat;
     });
-  }, [toolsRanking, toolSearch, toolCategoryFilter]);
 
-  // Filtered Employee Ranking
-  const filteredEmployees = useMemo(() => {
-    return employeeRanking.filter((e) => {
-      return (
-        e.employeeName.toLowerCase().includes(employeeSearch.toLowerCase()) ||
-        e.sector.toLowerCase().includes(employeeSearch.toLowerCase())
-      );
+    return list.sort((a, b) => {
+      if (toolSortBy === 'REQUESTS') return b.timesRequested - a.timesRequested;
+      if (toolSortBy === 'QUANTITY') return b.totalQuantityUsed - a.totalQuantityUsed;
+      if (toolSortBy === 'VALUE') return b.totalValueUsed - a.totalValueUsed;
+      if (toolSortBy === 'STOCK_LOW') return a.currentStock - b.currentStock;
+      if (toolSortBy === 'STOCK_HIGH') return b.currentStock - a.currentStock;
+      return 0;
     });
-  }, [employeeRanking, employeeSearch]);
+  }, [toolsRanking, toolSearch, toolCategoryFilter, toolSortBy]);
+
+  // Comprehensive Tool Ranking Statistics & KPIs
+  const toolRankingStats = useMemo(() => {
+    const totalRequests = toolsRanking.reduce((acc, t) => acc + t.timesRequested, 0);
+    const totalUnitsOut = toolsRanking.reduce((acc, t) => acc + t.totalQuantityUsed, 0);
+    const totalValueOut = toolsRanking.reduce((acc, t) => acc + t.totalValueUsed, 0);
+    const inStock = toolsRanking.filter((t) => t.currentStock > 0).length;
+    const outOfStock = toolsRanking.filter((t) => t.currentStock === 0).length;
+    const lowStock = toolsRanking.filter((t) => t.currentStock > 0 && t.currentStock <= 2).length;
+    const availabilityRate = toolsRanking.length > 0 ? Math.round((inStock / toolsRanking.length) * 100) : 100;
+    return {
+      totalRequests,
+      totalUnitsOut,
+      totalValueOut,
+      inStock,
+      outOfStock,
+      lowStock,
+      availabilityRate,
+    };
+  }, [toolsRanking]);
+
+  // Top 6 tools for bar chart
+  const topToolsChartData = useMemo(() => {
+    return toolsRanking.slice(0, 6).map((t) => ({
+      name: t.name.length > 14 ? t.name.slice(0, 13) + '…' : t.name,
+      fullName: t.name,
+      sku: t.sku,
+      requisições: t.timesRequested,
+      quantidade: t.totalQuantityUsed,
+      saldo: t.currentStock,
+    }));
+  }, [toolsRanking]);
+
+  // Category breakdown for tools
+  const toolsCategoryBreakdown = useMemo(() => {
+    const map: { [cat: string]: { count: number; requests: number; value: number } } = {};
+    toolsRanking.forEach((t) => {
+      const cat = t.category || 'Geral';
+      if (!map[cat]) map[cat] = { count: 0, requests: 0, value: 0 };
+      map[cat].count += 1;
+      map[cat].requests += t.timesRequested;
+      map[cat].value += t.totalValueUsed;
+    });
+    return Object.entries(map)
+      .map(([name, data]) => ({ name, value: data.requests, toolCount: data.count, totalVal: data.value }))
+      .sort((a, b) => b.value - a.value);
+  }, [toolsRanking]);
 
   // Terminal matched product
   const terminalMatchedProduct = useMemo(() => {
@@ -268,7 +321,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* 2. Top Executive Metrics (5 Key Cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
         {/* Card 1: Patrimônio Total */}
         <div className="p-4 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg hover:border-amber-500/50 transition">
           <div className="flex items-center justify-between">
@@ -334,7 +387,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card 4: Colaborador Mais Ativo */}
-        <div className="p-4 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg hover:border-amber-500/50 transition">
+        <div
+          onClick={() => onNavigateTab('employees')}
+          className="p-4 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg hover:border-amber-500/50 transition cursor-pointer hover:bg-[#121B2D]"
+          title="Clique para gerenciar o cadastro de funcionários"
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] uppercase tracking-wider font-semibold text-amber-400 flex items-center gap-1">
               <UserCheck className="w-3 h-3 text-amber-400" />
@@ -356,7 +413,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card 5: Estoque Crítico */}
-        <div className="col-span-2 sm:col-span-2 lg:col-span-1 p-4 bg-[#0D131F] border border-red-500/30 rounded-2xl shadow-lg hover:border-red-500/60 transition">
+        <div className="sm:col-span-2 md:col-span-3 xl:col-span-1 p-4 bg-[#0D131F] border border-red-500/30 rounded-2xl shadow-lg hover:border-red-500/60 transition">
           <div className="flex items-center justify-between">
             <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
               Estoque Crítico
@@ -415,312 +472,662 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </div>
 
-      {/* 4. CORE RANKINGS SECTION (DUAL SIDE-BY-SIDE PANELS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* RANKING A: FERRAMENTAS MAIS USADAS */}
-        <div className="p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-amber-500/20">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/30">
-                  <Wrench className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
-                    Ranking: Ferramentas Mais Usadas
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/50">
-                      {filteredTools.length} itens
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Frequência de saída, volume de empréstimos e colaborador que mais utilizou
-                  </p>
-                </div>
-              </div>
-
-              {/* Filters */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={toolCategoryFilter}
-                  onChange={(e) => setToolCategoryFilter(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-[#111827] border border-amber-500/30 rounded-lg text-slate-200 focus:outline-none focus:border-amber-400"
-                >
-                  <option value="TODAS">Todas Categorias</option>
-                  <option value="Ferramentas">Somente Ferramentas</option>
-                  <option value="EPI">EPIs</option>
-                  <option value="Elétrica">Elétrica</option>
-                  <option value="Hidráulica">Hidráulica</option>
-                </select>
-              </div>
+      {/* 4. DASHBOARD DO RANKING DE FERRAMENTAS & EQUIPAMENTOS */}
+      <div className="p-6 bg-[#0D131F] border border-amber-500/30 rounded-2xl shadow-xl space-y-6">
+        {/* Header & Controls */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-amber-500/20">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-amber-500/20 to-amber-600/10 text-amber-400 rounded-xl border border-amber-500/40 shrink-0 shadow-inner">
+              <Wrench className="w-6 h-6" />
             </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-serif font-bold text-lg sm:text-xl text-white tracking-tight">
+                  Dashboard do Ranking de Ferramentas
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/50 flex items-center gap-1">
+                  <Award className="w-3 h-3 text-amber-400" />
+                  {filteredTools.length} ferramentas catalogadas
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-400 font-sans mt-0.5">
+                Desempenho de rotação, frequência de saídas, disponibilidade física no almoxarifado e controle de cautelas.
+              </p>
+            </div>
+          </div>
 
-            {/* Tool Search Input */}
-            <div className="mb-3 relative">
+          {/* Quick Filters & Actions Bar */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Search Input */}
+            <div className="relative min-w-[200px] flex-1 sm:flex-initial">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
                 type="text"
                 value={toolSearch}
                 onChange={(e) => setToolSearch(e.target.value)}
-                placeholder="Buscar ferramenta no ranking..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#111827] border border-amber-500/30 rounded-lg text-slate-200 focus:outline-none focus:border-amber-400"
+                placeholder="Buscar por nome, SKU ou operador..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#111827] border border-amber-500/30 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400 transition"
               />
             </div>
 
-            {/* Ranking List */}
-            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-              {filteredTools.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">
-                  Nenhuma ferramenta encontrada para os filtros selecionados.
-                </div>
-              ) : (
-                filteredTools.map((tool, idx) => {
-                  const prod = products.find((p) => p.id === tool.productId);
-                  const isGold = idx === 0;
-                  const isSilver = idx === 1;
-                  const isBronze = idx === 2;
-
-                  return (
-                    <div
-                      key={tool.productId}
-                      className={`p-3 rounded-xl border transition ${
-                        isGold
-                          ? 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-400/40 dark:border-amber-500/30'
-                          : 'bg-slate-50/80 dark:bg-[#1C2128] border-slate-200 dark:border-[#2B323D]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2.5">
-                          {/* Rank Badge */}
-                          <div
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 font-mono shadow-sm ${
-                              isGold
-                                ? 'bg-amber-500 text-slate-950 border border-amber-300'
-                                : isSilver
-                                ? 'bg-slate-300 dark:bg-slate-600 text-slate-900 dark:text-white'
-                                : isBronze
-                                ? 'bg-amber-800 text-amber-100'
-                                : 'bg-slate-200 dark:bg-[#282F3A] text-slate-600 dark:text-slate-400'
-                            }`}
-                          >
-                            {isGold ? '🥇' : isSilver ? '🥈' : isBronze ? '🥉' : `#${idx + 1}`}
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-serif font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                                {tool.name}
-                              </span>
-                              <span className="px-1.5 py-0.2 text-[9px] font-mono rounded bg-slate-200 dark:bg-[#252C36] text-slate-700 dark:text-slate-300">
-                                {tool.sku}
-                              </span>
-                            </div>
-
-                            {/* Detailed metrics */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-sans">
-                              <div>
-                                Requisições:{' '}
-                                <strong className="text-amber-700 dark:text-amber-400 font-mono">
-                                  {tool.timesRequested}x
-                                </strong>{' '}
-                                ({tool.totalQuantityUsed} {tool.unit})
-                              </div>
-                              <div>
-                                Emprestado para:{' '}
-                                <strong className="text-slate-800 dark:text-slate-200">
-                                  {tool.topEmployee}
-                                </strong>
-                              </div>
-                              <div>
-                                Saldo Atual:{' '}
-                                <strong
-                                  className={`font-mono ${
-                                    tool.currentStock === 0
-                                      ? 'text-red-500'
-                                      : tool.currentStock <= 2
-                                      ? 'text-amber-500'
-                                      : 'text-emerald-600 dark:text-emerald-400'
-                                  }`}
-                                >
-                                  {tool.currentStock} {tool.unit}
-                                </strong>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Quick Action Button */}
-                        <button
-                          onClick={() => {
-                            if (prod) onSelectProduct(prod);
-                            onOpenMovementModal('SAIDA');
-                          }}
-                          className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm transition active:scale-95 shrink-0"
-                          title="Dar saída / cautela desta ferramenta"
-                        >
-                          Cautela
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-[#232830] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Rastreabilidade de Ferramentas Ativa</span>
-            <button
-              onClick={() => onNavigateTab('movements')}
-              className="text-amber-700 dark:text-amber-400 font-semibold hover:underline"
+            {/* Category Select */}
+            <select
+              value={toolCategoryFilter}
+              onChange={(e) => setToolCategoryFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs bg-[#111827] border border-amber-500/30 rounded-xl text-slate-200 focus:outline-none focus:border-amber-400 transition cursor-pointer"
             >
-              Ver Todas Cautelas →
+              <option value="TODAS">Todas Categorias</option>
+              <option value="Ferramentas">Ferramentas Manuais/Elétricas</option>
+              <option value="EPI">EPIs & Segurança</option>
+              <option value="Elétrica">Materiais Elétricos</option>
+              <option value="Hidráulica">Tubos & Conexões Hidráulicas</option>
+              <option value="Civil / Obras">Construção Civil & Obras</option>
+              <option value="Pintura">Pintura & Acabamento</option>
+              <option value="Outros">Outros</option>
+            </select>
+
+            {/* Sort Select */}
+            <div className="flex items-center gap-1.5 bg-[#111827] border border-amber-500/30 rounded-xl px-2.5 py-1">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+              <select
+                value={toolSortBy}
+                onChange={(e: any) => setToolSortBy(e.target.value)}
+                className="text-xs bg-transparent text-slate-200 focus:outline-none cursor-pointer"
+              >
+                <option value="REQUESTS" className="bg-[#111827]">Mais Requisitadas (Giro)</option>
+                <option value="QUANTITY" className="bg-[#111827]">Maior Quantidade Retirada</option>
+                <option value="VALUE" className="bg-[#111827]">Maior Valor Financeiro</option>
+                <option value="STOCK_LOW" className="bg-[#111827]">Menor Saldo (Ruptura)</option>
+                <option value="STOCK_HIGH" className="bg-[#111827]">Maior Saldo em Estoque</option>
+              </select>
+            </div>
+
+            {/* Quick Action Button */}
+            <button
+              onClick={() => onOpenMovementModal('SAIDA')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-bold shadow-md hover:shadow-amber-500/20 transition active:scale-95 cursor-pointer whitespace-nowrap"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Nova Cautela</span>
             </button>
           </div>
         </div>
 
-        {/* RANKING B: FUNCIONÁRIOS QUE MAIS USARAM / REQUISITARAM */}
-        <div className="p-5 bg-[#0D131F] border border-amber-500/25 rounded-2xl shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-4 pb-3 border-b border-amber-500/20">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/30">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
-                    Ranking: Funcionários Requisitantes
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/50">
-                      {filteredEmployees.length} colaboradores
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Colaboradores com maior volume de itens e ferramentas sob cautela
-                  </p>
-                </div>
-              </div>
+        {/* 4 Mini KPI Cards for Tool Ranking Overview */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI 1: Líder do Ranking */}
+          <div className="p-4 bg-[#111827] border border-amber-500/30 rounded-xl relative overflow-hidden shadow-md">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+            <div className="flex items-center justify-between text-xs text-amber-400 font-semibold mb-1">
+              <span className="flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                🥇 Líder Absoluta
+              </span>
+              <span className="font-mono text-[10px] bg-amber-950 px-1.5 py-0.5 rounded text-amber-300 border border-amber-500/40">
+                #1 Ranking
+              </span>
             </div>
-
-            {/* Employee Search Input */}
-            <div className="mb-3 relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input
-                type="text"
-                value={employeeSearch}
-                onChange={(e) => setEmployeeSearch(e.target.value)}
-                placeholder="Buscar colaborador ou setor..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-[#111827] border border-amber-500/30 rounded-lg text-slate-200 focus:outline-none focus:border-amber-400"
-              />
+            <div className="text-sm font-serif font-bold text-white truncate" title={topTool?.name || 'Nenhuma'}>
+              {topTool ? topTool.name : 'Nenhuma saída'}
             </div>
+            <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+              <span>{topTool ? `${topTool.timesRequested}x retiradas` : '-'}</span>
+              <span className="font-mono text-emerald-400">{topTool ? `${topTool.currentStock} ${topTool.unit} em estoque` : ''}</span>
+            </div>
+          </div>
 
-            {/* Ranking List */}
-            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-              {filteredEmployees.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-400">
-                  Nenhum colaborador registrado em saídas ainda.
-                </div>
+          {/* KPI 2: Total de Requisições */}
+          <div className="p-4 bg-[#111827] border border-amber-500/30 rounded-xl relative overflow-hidden shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-semibold mb-1">
+              <span className="flex items-center gap-1 text-amber-300">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                Total de Cautelas
+              </span>
+              <span className="font-mono text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                Giro Total
+              </span>
+            </div>
+            <div className="text-xl font-serif font-bold text-white">
+              {toolRankingStats.totalRequests}{' '}
+              <span className="text-xs font-normal text-slate-400 font-sans">empréstimos</span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              Frequência acumulada no almoxarifado
+            </div>
+          </div>
+
+          {/* KPI 3: Itens Retirados em Campo */}
+          <div className="p-4 bg-[#111827] border border-amber-500/30 rounded-xl relative overflow-hidden shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-semibold mb-1">
+              <span className="flex items-center gap-1 text-amber-300">
+                <Boxes className="w-3.5 h-3.5 text-amber-400" />
+                Unidades em Operação
+              </span>
+              <span className="font-mono text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                Volume
+              </span>
+            </div>
+            <div className="text-xl font-serif font-bold text-white">
+              {toolRankingStats.totalUnitsOut}{' '}
+              <span className="text-xs font-normal text-slate-400 font-sans">unidades</span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              Equipamentos entregues às equipes
+            </div>
+          </div>
+
+          {/* KPI 4: Taxa de Disponibilidade */}
+          <div className="p-4 bg-[#111827] border border-amber-500/30 rounded-xl relative overflow-hidden shadow-md">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-semibold mb-1">
+              <span className="flex items-center gap-1 text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                Taxa de Pronta-Entrega
+              </span>
+              <span className="font-mono text-[10px] bg-emerald-950/80 px-1.5 py-0.5 rounded text-emerald-300 border border-emerald-500/30">
+                {toolRankingStats.availabilityRate}%
+              </span>
+            </div>
+            <div className="text-xl font-serif font-bold text-emerald-400">
+              {toolRankingStats.inStock}{' '}
+              <span className="text-xs font-normal text-slate-400 font-sans">itens disponíveis</span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              {toolRankingStats.outOfStock > 0 ? (
+                <span className="text-red-400 font-medium">{toolRankingStats.outOfStock} ferramentas zeradas</span>
               ) : (
-                filteredEmployees.map((emp, idx) => {
-                  const isGold = idx === 0;
-                  const isSilver = idx === 1;
-                  const isBronze = idx === 2;
+                <span className="text-emerald-400">100% dos modelos com estoque</span>
+              )}
+            </div>
+          </div>
+        </div>
 
-                  // Initials for avatar
-                  const initials = emp.employeeName
-                    .split(' ')
-                    .map((n) => n[0])
-                    .slice(0, 2)
-                    .join('')
-                    .toUpperCase();
+        {/* Podium: Top 3 Ferramentas Campeãs */}
+        {filteredTools.length >= 1 && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif font-bold text-sm text-slate-200 flex items-center gap-2">
+                <span>Pódio de Destaque das Ferramentas</span>
+                <span className="text-xs text-amber-400 font-mono font-normal">Top 3 mais utilizadas em obras</span>
+              </h3>
+            </div>
 
-                  return (
-                    <div
-                      key={emp.employeeName}
-                      className={`p-3 rounded-xl border transition ${
-                        isGold
-                          ? 'bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-400/40 dark:border-indigo-500/30'
-                          : 'bg-slate-50/80 dark:bg-[#1C2128] border-slate-200 dark:border-[#2B323D]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-2.5">
-                          {/* Avatar & Rank badge */}
-                          <div className="relative shrink-0">
-                            <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs font-mono shadow-sm ${
-                                isGold
-                                  ? 'bg-indigo-600 text-white'
-                                  : isSilver
-                                  ? 'bg-slate-600 text-white'
-                                  : isBronze
-                                  ? 'bg-amber-800 text-amber-100'
-                                  : 'bg-slate-200 dark:bg-[#282F3A] text-slate-700 dark:text-slate-300'
-                              }`}
-                            >
-                              {initials}
-                            </div>
-                            <span className="absolute -bottom-1 -right-1 text-[10px]">
-                              {isGold ? '🏆' : isSilver ? '🥈' : isBronze ? '🥉' : `#${idx + 1}`}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 1st Place - Gold */}
+              {filteredTools[0] && (() => {
+                const tool = filteredTools[0];
+                const prod = products.find((p) => p.id === tool.productId);
+                return (
+                  <div className="p-4 rounded-2xl bg-gradient-to-b from-amber-500/15 via-[#131924] to-[#0D131F] border-2 border-amber-400/50 shadow-lg relative flex flex-col justify-between">
+                    <div className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-500 text-slate-950 border border-amber-300 shadow-md">
+                      🥇 1º LUGAR — CAMPEÃ
+                    </div>
+                    <div>
+                      <div className="flex items-start gap-2.5 mt-1">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-base font-mono shadow-md shrink-0">
+                          1º
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-serif font-bold text-sm text-white truncate" title={tool.name}>
+                            {tool.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 font-mono text-[10px] border border-amber-500/40">
+                              {tool.sku}
                             </span>
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-serif font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                                {emp.employeeName}
-                              </span>
-                              <span className="px-1.5 py-0.2 text-[9px] font-sans rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900">
-                                {emp.sector}
-                              </span>
-                            </div>
-
-                            {/* Detailed employee metrics */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-sans">
-                              <div>
-                                Retiradas:{' '}
-                                <strong className="text-indigo-700 dark:text-indigo-400 font-mono">
-                                  {emp.totalMovements}x
-                                </strong>{' '}
-                                ({emp.totalItemsTaken} itens)
-                              </div>
-                              <div>
-                                Ferramenta Principal:{' '}
-                                <strong className="text-slate-800 dark:text-slate-200 truncate inline-block max-w-[110px] align-bottom" title={emp.mostUsedItem}>
-                                  {emp.mostUsedItem}
-                                </strong>
-                              </div>
-                              <div>
-                                Valor Acumulado:{' '}
-                                <strong className="text-slate-900 dark:text-slate-200 font-mono">
-                                  {formatCurrency(emp.totalValueTaken)}
-                                </strong>
-                              </div>
-                            </div>
+                            <span className="text-[10px] text-slate-400 truncate">{tool.category}</span>
                           </div>
                         </div>
+                      </div>
 
-                        {/* Quick Cautela button */}
-                        <button
-                          onClick={() => onOpenMovementModal('SAIDA')}
-                          className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold whitespace-nowrap shadow-sm transition active:scale-95 shrink-0"
-                          title="Emitir nova cautela para este colaborador"
-                        >
-                          Nova Cautela
-                        </button>
+                      <div className="mt-3.5 pt-3 border-t border-amber-500/20 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-400 text-[11px]">Requisições:</span>
+                          <div className="font-bold text-amber-300 font-mono">{tool.timesRequested}x ({tool.totalQuantityUsed} {tool.unit})</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px]">Saldo no Almoxarifado:</span>
+                          <div className={`font-bold font-mono ${tool.currentStock === 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tool.currentStock} {tool.unit}
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-[11px] text-slate-300 truncate">
+                          Requisitante principal: <strong className="text-white">{tool.topEmployee || 'Geral'}</strong>
+                        </div>
                       </div>
                     </div>
-                  );
-                })
+
+                    <button
+                      onClick={() => {
+                        if (prod) onSelectProduct(prod);
+                        onOpenMovementModal('SAIDA');
+                      }}
+                      className="mt-3.5 w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-md transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Wrench className="w-3 h-3" />
+                      <span>Emitir Cautela desta Ferramenta</span>
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* 2nd Place - Silver */}
+              {filteredTools[1] && (() => {
+                const tool = filteredTools[1];
+                const prod = products.find((p) => p.id === tool.productId);
+                return (
+                  <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-400/10 via-[#131924] to-[#0D131F] border border-slate-400/40 shadow-lg relative flex flex-col justify-between">
+                    <div className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-slate-300 text-slate-900 border border-slate-200 shadow-md">
+                      🥈 2º LUGAR
+                    </div>
+                    <div>
+                      <div className="flex items-start gap-2.5 mt-1">
+                        <div className="w-10 h-10 rounded-xl bg-slate-300 text-slate-900 flex items-center justify-center font-bold text-base font-mono shadow-md shrink-0">
+                          2º
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-serif font-bold text-sm text-white truncate" title={tool.name}>
+                            {tool.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                              {tool.sku}
+                            </span>
+                            <span className="text-[10px] text-slate-400 truncate">{tool.category}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3.5 pt-3 border-t border-slate-700/50 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-400 text-[11px]">Requisições:</span>
+                          <div className="font-bold text-slate-200 font-mono">{tool.timesRequested}x ({tool.totalQuantityUsed} {tool.unit})</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px]">Saldo no Almoxarifado:</span>
+                          <div className={`font-bold font-mono ${tool.currentStock === 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tool.currentStock} {tool.unit}
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-[11px] text-slate-300 truncate">
+                          Requisitante principal: <strong className="text-white">{tool.topEmployee || 'Geral'}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (prod) onSelectProduct(prod);
+                        onOpenMovementModal('SAIDA');
+                      }}
+                      className="mt-3.5 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs border border-slate-600 shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Wrench className="w-3 h-3 text-amber-400" />
+                      <span>Emitir Cautela</span>
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* 3rd Place - Bronze */}
+              {filteredTools[2] && (() => {
+                const tool = filteredTools[2];
+                const prod = products.find((p) => p.id === tool.productId);
+                return (
+                  <div className="p-4 rounded-2xl bg-gradient-to-b from-amber-800/20 via-[#131924] to-[#0D131F] border border-amber-700/40 shadow-lg relative flex flex-col justify-between">
+                    <div className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-800 text-amber-100 border border-amber-600 shadow-md">
+                      🥉 3º LUGAR
+                    </div>
+                    <div>
+                      <div className="flex items-start gap-2.5 mt-1">
+                        <div className="w-10 h-10 rounded-xl bg-amber-800 text-amber-100 flex items-center justify-center font-bold text-base font-mono shadow-md shrink-0">
+                          3º
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-serif font-bold text-sm text-white truncate" title={tool.name}>
+                            {tool.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                              {tool.sku}
+                            </span>
+                            <span className="text-[10px] text-slate-400 truncate">{tool.category}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3.5 pt-3 border-t border-amber-900/40 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-400 text-[11px]">Requisições:</span>
+                          <div className="font-bold text-amber-200 font-mono">{tool.timesRequested}x ({tool.totalQuantityUsed} {tool.unit})</div>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px]">Saldo no Almoxarifado:</span>
+                          <div className={`font-bold font-mono ${tool.currentStock === 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {tool.currentStock} {tool.unit}
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-[11px] text-slate-300 truncate">
+                          Requisitante principal: <strong className="text-white">{tool.topEmployee || 'Geral'}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (prod) onSelectProduct(prod);
+                        onOpenMovementModal('SAIDA');
+                      }}
+                      className="mt-3.5 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs border border-slate-600 shadow-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Wrench className="w-3 h-3 text-amber-400" />
+                      <span>Emitir Cautela</span>
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Visual Analytics Charts Grid for Tools */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+          {/* Chart 1: Top 6 Demanded Tools Bar Chart */}
+          <div className="lg:col-span-2 p-4 bg-[#111827] border border-amber-500/25 rounded-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h4 className="font-serif font-bold text-sm text-white flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-400" />
+                  Comparativo de Demanda: Top Ferramentas
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Relação direta entre número de requisições e volume físico retirado (unidades)
+                </p>
+              </div>
+              <span className="text-[11px] font-mono text-amber-400">Top 6 Mais Utilizadas</span>
+            </div>
+
+            <div className="h-56 w-full">
+              {topToolsChartData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                  Nenhuma saída de ferramentas registrada até o momento.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topToolsChartData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} />
+                    <YAxis stroke="#94a3b8" fontSize={10} />
+                    <Tooltip
+                      formatter={(val: any, name: string) => [
+                        `${val} ${name.includes('Quantidade') ? 'unidades' : 'vezes'}`,
+                        name === 'requisições' ? 'Requisições' : 'Quantidade Retirada',
+                      ]}
+                      labelFormatter={(_, arr) => arr[0]?.payload?.fullName || ''}
+                      contentStyle={{
+                        backgroundColor: '#0D131F',
+                        borderColor: '#F59E0B55',
+                        borderRadius: '10px',
+                        color: '#F3F4F6',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '11px' }} />
+                    <Bar dataKey="requisições" name="Frequência (x)" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="quantidade" name="Quantidade Total (un)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
             </div>
           </div>
 
-          <div className="pt-3 mt-3 border-t border-slate-100 dark:border-[#232830] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>Controle Individual de Responsabilidade</span>
+          {/* Chart 2: Category Distribution of Tool Usage */}
+          <div className="p-4 bg-[#111827] border border-amber-500/25 rounded-2xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h4 className="font-serif font-bold text-sm text-white flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-amber-400" />
+                    Demandas por Categoria
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Proporção de retiradas por tipo de material
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-44 w-full relative">
+                {toolsCategoryBreakdown.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                    Sem dados cadastrados.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={toolsCategoryBreakdown}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={42}
+                        outerRadius={68}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {toolsCategoryBreakdown.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: any, name: string) => [`${value} requisições`, name]}
+                        contentStyle={{
+                          backgroundColor: '#0D131F',
+                          borderColor: '#F59E0B55',
+                          borderRadius: '10px',
+                          color: '#F3F4F6',
+                          fontSize: '11px',
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-400">
+              <span>Classificação por centro de aplicação</span>
+              <span className="font-mono text-amber-400 font-bold">{toolsCategoryBreakdown.length} categorias</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Full Interactive Tools Ranking Table */}
+        <div className="space-y-3 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 className="font-serif font-bold text-sm sm:text-base text-white flex items-center gap-2">
+              <span>Tabela Geral do Ranking de Ferramentas</span>
+              <span className="text-xs font-mono font-normal text-slate-400">
+                ({filteredTools.length} registros correspondentes)
+              </span>
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onNavigateTab('cautelas')}
+                className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <span>Gestão de Cautelas Ativas</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-amber-500/20 bg-[#111827]">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-[#182030] text-slate-400 uppercase font-mono text-[10px] tracking-wider border-b border-amber-500/20">
+                <tr>
+                  <th className="py-3 px-3.5 text-center">Posição</th>
+                  <th className="py-3 px-3.5">Ferramenta & Código SKU</th>
+                  <th className="py-3 px-3.5">Categoria</th>
+                  <th className="py-3 px-3.5 text-center">Requisições</th>
+                  <th className="py-3 px-3.5 text-center">Qtd. Retirada</th>
+                  <th className="py-3 px-3.5">Principal Requisitante</th>
+                  <th className="py-3 px-3.5 text-center">Saldo em Estoque</th>
+                  <th className="py-3 px-3.5 text-right">Valor em Giro</th>
+                  <th className="py-3 px-3.5 text-center">Ação Rápida</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {filteredTools.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-slate-400 text-xs">
+                      Nenhuma ferramenta encontrada com os filtros atuais.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTools.map((tool, idx) => {
+                    const prod = products.find((p) => p.id === tool.productId);
+                    const isGold = idx === 0;
+                    const isSilver = idx === 1;
+                    const isBronze = idx === 2;
+
+                    return (
+                      <tr
+                        key={tool.productId}
+                        className={`hover:bg-[#1A2333] transition ${
+                          isGold
+                            ? 'bg-amber-500/5'
+                            : isSilver
+                            ? 'bg-slate-500/5'
+                            : isBronze
+                            ? 'bg-amber-900/10'
+                            : ''
+                        }`}
+                      >
+                        {/* Position */}
+                        <td className="py-3 px-3.5 text-center font-mono font-bold">
+                          {isGold ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs shadow-sm">
+                              🥇
+                            </span>
+                          ) : isSilver ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-slate-300 text-slate-900 font-bold text-xs shadow-sm">
+                              🥈
+                            </span>
+                          ) : isBronze ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-amber-800 text-amber-100 font-bold text-xs shadow-sm">
+                              🥉
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">#{idx + 1}</span>
+                          )}
+                        </td>
+
+                        {/* Name and SKU */}
+                        <td className="py-3 px-3.5">
+                          <div className="font-serif font-bold text-slate-100 text-xs sm:text-sm">
+                            {tool.name}
+                          </div>
+                          <div className="font-mono text-[10px] text-amber-400/80">
+                            {tool.sku}
+                          </div>
+                        </td>
+
+                        {/* Category */}
+                        <td className="py-3 px-3.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap">
+                            {tool.category}
+                          </span>
+                        </td>
+
+                        {/* Requests Count */}
+                        <td className="py-3 px-3.5 text-center font-mono font-bold text-amber-400">
+                          {tool.timesRequested}x
+                        </td>
+
+                        {/* Quantity Used */}
+                        <td className="py-3 px-3.5 text-center font-mono text-slate-200">
+                          {tool.totalQuantityUsed} {tool.unit}
+                        </td>
+
+                        {/* Top Employee & Sector */}
+                        <td className="py-3 px-3.5">
+                          <div className="font-semibold text-slate-200 truncate max-w-[150px]" title={tool.topEmployee}>
+                            {tool.topEmployee || 'Almoxarifado Geral'}
+                          </div>
+                          {tool.topSector && (
+                            <div className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                              Setor: {tool.topSector}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Stock Balance Status */}
+                        <td className="py-3 px-3.5 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                              tool.currentStock === 0
+                                ? 'bg-red-950 text-red-300 border border-red-500/40'
+                                : tool.currentStock <= 2
+                                ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
+                                : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                tool.currentStock === 0
+                                  ? 'bg-red-400 animate-pulse'
+                                  : tool.currentStock <= 2
+                                  ? 'bg-amber-400'
+                                  : 'bg-emerald-400'
+                              }`}
+                            />
+                            {tool.currentStock} {tool.unit}
+                          </span>
+                        </td>
+
+                        {/* Value */}
+                        <td className="py-3 px-3.5 text-right font-mono text-slate-200">
+                          {formatCurrency(tool.totalValueUsed)}
+                        </td>
+
+                        {/* Action Button */}
+                        <td className="py-3 px-3.5 text-center">
+                          <button
+                            onClick={() => {
+                              if (prod) onSelectProduct(prod);
+                              onOpenMovementModal('SAIDA');
+                            }}
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[11px] font-bold shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
+                            title="Emitir cautela ou saída desta ferramenta"
+                          >
+                            Cautela
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer info & Navigation */}
+        <div className="pt-3 border-t border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Rastreabilidade em tempo real de equipamentos sob cautela e termos de responsabilidade.</span>
+          </div>
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => onNavigateTab('reports')}
-              className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+              onClick={() => onNavigateTab('cautelas')}
+              className="text-amber-400 hover:underline font-semibold cursor-pointer"
             >
-              Relatório por Funcionário →
+              Abrir Painel de Cautelas →
+            </button>
+            <button
+              onClick={() => onNavigateTab('movements')}
+              className="text-slate-300 hover:text-white font-semibold cursor-pointer"
+            >
+              Auditoria de Saídas →
             </button>
           </div>
         </div>

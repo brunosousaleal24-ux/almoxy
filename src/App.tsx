@@ -18,6 +18,7 @@ import { KnowledgeBaseView } from './components/KnowledgeBaseView';
 import { SettingsBackupView } from './components/SettingsBackupView';
 import { CautelasView } from './components/CautelasView';
 import { ConstructionSitesView } from './components/ConstructionSitesView';
+import { EmployeesView } from './components/EmployeesView';
 
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { MovementModal } from './components/MovementModal';
@@ -134,7 +135,7 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* Main Content Area with Framer Motion Animation */}
-      <main className="flex-1 w-full max-w-[1720px] mx-auto px-3 sm:px-5 lg:px-6 pt-5 pb-16 relative z-10">
+      <main className="flex-1 w-full max-w-[1720px] mx-auto px-3 sm:px-5 md:px-6 lg:px-8 xl:px-10 pt-4 sm:pt-6 pb-16 relative z-10 transition-all">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -165,6 +166,8 @@ const MainAppContent: React.FC = () => {
                 onOpenMovementModal={(type) => handleOpenMovementModal(undefined, type)}
               />
             )}
+
+            {activeTab === 'employees' && <EmployeesView />}
 
             {activeTab === 'cautions' && <CautelasView />}
 

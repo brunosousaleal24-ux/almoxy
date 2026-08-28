@@ -105,6 +105,20 @@ export interface EmployeeRanking {
   lastActiveDate: string;
 }
 
+export interface Employee {
+  id: string;
+  name: string;
+  cpf: string;
+  registrationNumber: string; // Matrícula
+  role: string; // Cargo (ex: Eletricista, Encanador, Pedreiro)
+  sector: string; // Setor / Departamento
+  phone: string;
+  email: string;
+  active: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;

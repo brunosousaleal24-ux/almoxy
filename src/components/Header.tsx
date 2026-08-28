@@ -23,6 +23,7 @@ import {
   LogIn,
   Building2,
   Wrench,
+  Users,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { BorgesGomesLogo } from './BorgesGomesLogo';
@@ -32,6 +33,7 @@ export type ActiveTab =
   | 'dashboard'
   | 'inventory'
   | 'movements'
+  | 'employees'
   | 'cautions'
   | 'construction-sites'
   | 'reports'
@@ -87,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-30 bg-[#090D17]/95 backdrop-blur-xl border-b border-amber-500/30 shadow-[0_4px_30px_rgba(0,0,0,0.5)] transition-colors">
       {/* Top Command Navbar */}
-      <div className="w-full max-w-[1720px] mx-auto px-3 sm:px-5 lg:px-6">
+      <div className="w-full max-w-[1720px] mx-auto px-3 sm:px-5 md:px-6 lg:px-8 xl:px-10">
         <div className="flex items-center justify-between h-15 gap-2 sm:gap-3">
           {/* Logo & Brand Borges & Gomes with Command Accent */}
           <div
@@ -384,6 +386,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <ArrowLeftRight className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>Movimentações</span>
+          </button>
+
+          <button
+            id="nav-tab-employees"
+            onClick={() => setActiveTab('employees')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 2xl:px-3 2xl:py-1.5 rounded-xl font-medium whitespace-nowrap transition cursor-pointer shrink-0 ${
+              activeTab === 'employees'
+                ? 'bg-gradient-to-r from-amber-500/25 to-amber-500/10 text-amber-300 border border-amber-500/60 font-bold shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+                : 'text-slate-400 hover:text-white hover:bg-[#131B2A] border border-transparent'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Funcionários</span>
           </button>
 
           <button

@@ -4,24 +4,24 @@ import {
   Filter,
   Plus,
   FileSpreadsheet,
-  FileText,
   Barcode,
   ArrowDownRight,
   ArrowUpRight,
   Edit2,
   Trash2,
   MapPin,
-  Tag,
   AlertTriangle,
-  CheckCircle2,
   SlidersHorizontal,
   Printer,
   X,
-  Package,
+  CheckSquare,
+  Square,
+  RotateCcw,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
-import { Product, ProductCategory, StockStatus } from '../types';
-import { formatCurrency, exportInventoryToExcel, formatDate } from '../utils/exportUtils';
+import { Product, ProductCategory } from '../types';
+import { formatCurrency, exportInventoryToExcel } from '../utils/exportUtils';
+import { BarcodeVisual } from './BarcodeVisual';
 
 interface StockCatalogViewProps {
   onOpenProductModal: (product?: Product) => void;
@@ -46,12 +46,18 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
   onOpenProductModal,
   onOpenMovementModal,
 }) => {
-  const { products, deleteProduct, settings } = useInventory();
+  const { products, deleteProduct, deleteProductsBulk, clearAllProducts, settings } = useInventory();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'TODAS'>('TODAS');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CRITICO' | 'BAIXO' | 'NORMAL'>('ALL');
   const [labelModalProduct, setLabelModalProduct] = useState<Product | null>(null);
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
 
   // Filter products
   const filteredProducts = products.filter((p) => {
@@ -71,15 +77,47 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
     return matchesSearch && matchesCat && matchesStatus;
   });
 
-  const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o produto "${name}" do almoxarifado?`)) {
-      deleteProduct(id);
+  const allFilteredSelected =
+    filteredProducts.length > 0 &&
+    filteredProducts.every((p) => selectedIds.includes(p.id));
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filteredProducts.map((p) => p.id));
+      setSelectedIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+    } else {
+      const newIds = new Set([...selectedIds, ...filteredProducts.map((p) => p.id)]);
+      setSelectedIds(Array.from(newIds));
     }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    deleteProductsBulk(selectedIds);
+    setSelectedIds([]);
+    setIsBulkDeleteModalOpen(false);
+  };
+
+  const handleClearAll = () => {
+    clearAllProducts();
+    setSelectedIds([]);
+    setIsClearAllModalOpen(false);
   };
 
   const handlePrintLabel = () => {
     window.print();
   };
+
+  const totalFilteredValuation = filteredProducts.reduce((sum, p) => sum + p.currentStock * p.costPrice, 0);
+  const totalFilteredStock = filteredProducts.reduce((sum, p) => sum + p.currentStock, 0);
+  const criticalCount = filteredProducts.filter((p) => p.currentStock === 0).length;
+  const lowCount = filteredProducts.filter((p) => p.currentStock > 0 && p.currentStock <= p.minStock).length;
 
   return (
     <div className="space-y-6 pb-12">
@@ -90,16 +128,40 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             Catálogo & Controle de Estoque Físico
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-0.5">
-            Listagem oficial de insumos, endereçamento logístico e saldos em tempo real.
+            Listagem oficial de insumos, endereçamento logístico e saldos em tempo real com leitor de código de barras e gestão total de exclusão.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Selected Bulk Delete */}
+          {selectedIds.length > 0 && (
+            <button
+              id="btn-delete-selected-products"
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md shadow-red-950/20 transition active:scale-95 cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Apagar Selecionados ({selectedIds.length})</span>
+            </button>
+          )}
+
+          {/* Clear All Products */}
+          {products.length > 0 && (
+            <button
+              id="btn-clear-all-products"
+              onClick={() => setIsClearAllModalOpen(true)}
+              className="px-3 py-2 bg-slate-100 hover:bg-red-500/10 text-slate-600 hover:text-red-500 dark:bg-[#1A1F26] dark:hover:bg-red-950/30 dark:text-slate-400 dark:hover:text-red-400 text-xs font-semibold rounded-xl border border-slate-200 dark:border-[#2F3744] transition cursor-pointer"
+              title="Apagar todo o catálogo de produtos"
+            >
+              Limpar Catálogo
+            </button>
+          )}
+
           {/* Export to Excel */}
           <button
             id="btn-export-inventory-excel"
             onClick={() => exportInventoryToExcel(products, settings.companyName)}
-            className="px-3.5 py-2 bg-slate-900 dark:bg-[#1A1F26] hover:bg-slate-800 dark:hover:bg-[#232A34] text-slate-200 hover:text-white border border-slate-700/60 dark:border-[#2F3744] text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition"
+            className="px-3.5 py-2 bg-slate-900 dark:bg-[#1A1F26] hover:bg-slate-800 dark:hover:bg-[#232A34] text-slate-200 hover:text-white border border-slate-700/60 dark:border-[#2F3744] text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-sm transition cursor-pointer"
             title="Exportar inventário completo em formato Excel (.xlsx)"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
@@ -110,11 +172,39 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
           <button
             id="btn-add-product"
             onClick={() => onOpenProductModal()}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-slate-950 text-xs font-bold font-sans rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-900/20 transition active:scale-95"
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-slate-950 text-xs font-bold font-sans rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-900/20 transition active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Produto</span>
           </button>
+        </div>
+      </div>
+
+      {/* Proportional KPI Quick Overview */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-3.5 bg-white dark:bg-[#121620] border border-slate-200 dark:border-amber-500/20 rounded-2xl shadow-sm">
+          <span className="text-[10px] uppercase font-mono text-slate-400 font-bold">Itens Filtrados</span>
+          <div className="text-lg sm:text-xl font-serif font-bold text-slate-900 dark:text-white mt-0.5">
+            {filteredProducts.length} <span className="text-xs font-normal text-slate-400 font-sans">de {products.length} SKUs</span>
+          </div>
+        </div>
+        <div className="p-3.5 bg-white dark:bg-[#121620] border border-slate-200 dark:border-emerald-500/20 rounded-2xl shadow-sm">
+          <span className="text-[10px] uppercase font-mono text-slate-400 font-bold">Unidades Físicas</span>
+          <div className="text-lg sm:text-xl font-serif font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+            {totalFilteredStock.toLocaleString('pt-BR')} <span className="text-xs font-normal text-slate-400 font-sans">unidades</span>
+          </div>
+        </div>
+        <div className="p-3.5 bg-white dark:bg-[#121620] border border-slate-200 dark:border-amber-500/20 rounded-2xl shadow-sm">
+          <span className="text-[10px] uppercase font-mono text-slate-400 font-bold">Valor em Estoque</span>
+          <div className="text-lg sm:text-xl font-serif font-bold text-amber-600 dark:text-amber-300 mt-0.5">
+            {formatCurrency(totalFilteredValuation)}
+          </div>
+        </div>
+        <div className="p-3.5 bg-white dark:bg-[#121620] border border-slate-200 dark:border-red-500/20 rounded-2xl shadow-sm">
+          <span className="text-[10px] uppercase font-mono text-slate-400 font-bold">Atenção & Rupturas</span>
+          <div className="text-lg sm:text-xl font-serif font-bold text-red-500 dark:text-red-400 mt-0.5">
+            {criticalCount + lowCount} <span className="text-xs font-normal text-slate-400 font-sans">({criticalCount} zerados)</span>
+          </div>
         </div>
       </div>
 
@@ -140,7 +230,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full py-2 px-3 text-xs bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60 font-sans"
+              className="w-full py-2 px-3 text-xs bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60 font-sans cursor-pointer"
             >
               <option value="ALL">Todos os Níveis de Estoque</option>
               <option value="CRITICO">🚨 Ruptura / Estoque Zerado (0)</option>
@@ -156,7 +246,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap transition ${
+              className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap transition cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
                   : 'bg-slate-100 dark:bg-[#1C2128] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#252B35] font-medium'
@@ -174,6 +264,20 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 dark:border-[#262B33] bg-slate-50 dark:bg-[#13161A] text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th className="py-3.5 px-3 w-10 text-center">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="text-slate-400 hover:text-amber-500 transition cursor-pointer"
+                    title={allFilteredSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                  >
+                    {allFilteredSelected ? (
+                      <CheckSquare className="w-4 h-4 text-amber-500" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3.5 px-4">Item / Código</th>
                 <th className="py-3.5 px-4">Categoria</th>
                 <th className="py-3.5 px-4 text-center">Saldo Físico</th>
@@ -187,12 +291,13 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-[#21262E] text-xs">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     Nenhum produto encontrado com os filtros selecionados.
                   </td>
                 </tr>
               ) : (
                 filteredProducts.map((p) => {
+                  const isSelected = selectedIds.includes(p.id);
                   const totalVal = p.currentStock * p.costPrice;
                   const isCritical = p.currentStock === 0;
                   const isLow = p.currentStock > 0 && p.currentStock <= p.minStock;
@@ -200,8 +305,25 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
                   return (
                     <tr
                       key={p.id}
-                      className="hover:bg-slate-50/80 dark:hover:bg-[#1C2128]/70 transition group"
+                      className={`hover:bg-slate-50/80 dark:hover:bg-[#1C2128]/70 transition group ${
+                        isSelected ? 'bg-amber-500/5 dark:bg-amber-500/10' : ''
+                      }`}
                     >
+                      {/* Checkbox */}
+                      <td className="py-3.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectOne(p.id)}
+                          className="text-slate-400 hover:text-amber-500 transition cursor-pointer"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-amber-500" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </td>
+
                       {/* Name, SKU & Barcode */}
                       <td className="py-3.5 px-4">
                         <div className="font-serif font-bold text-slate-900 dark:text-[#F3F4F6] text-sm">
@@ -275,7 +397,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
                           {/* Quick Entry (+) */}
                           <button
                             onClick={() => onOpenMovementModal(p, 'ENTRADA')}
-                            className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition"
+                            className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition cursor-pointer"
                             title="Dar Entrada Rápida (+)"
                           >
                             <ArrowDownRight className="w-4 h-4" />
@@ -284,7 +406,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
                           {/* Quick Exit (-) */}
                           <button
                             onClick={() => onOpenMovementModal(p, 'SAIDA')}
-                            className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition"
+                            className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition cursor-pointer"
                             title="Dar Saída Rápida (-)"
                           >
                             <ArrowUpRight className="w-4 h-4" />
@@ -293,7 +415,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
                           {/* Print Label */}
                           <button
                             onClick={() => setLabelModalProduct(p)}
-                            className="p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-lg transition"
+                            className="p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-lg transition cursor-pointer"
                             title="Gerar e Imprimir Etiqueta c/ Código de Barras"
                           >
                             <Barcode className="w-4 h-4" />
@@ -302,7 +424,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
                           {/* Edit */}
                           <button
                             onClick={() => onOpenProductModal(p)}
-                            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
                             title="Editar Dados do Produto"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -310,8 +432,8 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
 
                           {/* Delete */}
                           <button
-                            onClick={() => handleDelete(p.id, p.name)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition"
+                            onClick={() => setProductToDelete(p)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-lg transition cursor-pointer"
                             title="Excluir Produto"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -338,7 +460,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
         </div>
       </div>
 
-      {/* Printable Barcode Label Modal */}
+      {/* Printable Barcode Label Modal with True Barcode */}
       {labelModalProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#16191D] border border-slate-200 dark:border-[#2F3744] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
@@ -351,7 +473,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
               </div>
               <button
                 onClick={() => setLabelModalProduct(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -369,27 +491,16 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
                 SKU: {labelModalProduct.sku}
               </p>
 
-              {/* Barcode Visual Strips Simulation */}
+              {/* Real SVG Scannable Barcode */}
               <div className="py-2 flex flex-col items-center justify-center">
-                <div className="h-14 w-60 bg-slate-900 dark:bg-white flex items-center justify-center p-1 rounded">
-                  <div className="flex items-center justify-between w-full h-full bg-white dark:bg-slate-950 px-2">
-                    {Array.from({ length: 45 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-full ${
-                          i % 3 === 0
-                            ? 'w-1 bg-black dark:bg-white'
-                            : i % 2 === 0
-                            ? 'w-0.5 bg-black dark:bg-white'
-                            : 'w-1.5 bg-transparent'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <span className="font-mono text-xs tracking-widest mt-1 font-bold text-slate-800 dark:text-slate-200">
-                  {labelModalProduct.barcode}
-                </span>
+                <BarcodeVisual
+                  value={labelModalProduct.barcode || labelModalProduct.sku}
+                  format="CODE128"
+                  width={1.6}
+                  height={52}
+                  fontSize={12}
+                  className="bg-white p-2 rounded-lg shadow-inner"
+                />
               </div>
 
               <div className="text-[11px] text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-[#262B33] pt-2 font-mono">
@@ -400,16 +511,133 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setLabelModalProduct(null)}
-                className="px-4 py-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                className="px-4 py-2 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
               >
                 Fechar
               </button>
               <button
                 onClick={handlePrintLabel}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 Imprimir Etiqueta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Product Modal */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-[#16191D] border border-red-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-500">
+              <div className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-serif font-bold text-slate-900 dark:text-white">
+                Excluir Produto
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Tem certeza que deseja apagar <strong>{productToDelete.name}</strong> (SKU: {productToDelete.sku}) do estoque?
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                className="px-4 py-2 bg-slate-100 dark:bg-[#1C2128] text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#252C36] transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteProduct(productToDelete.id);
+                  setProductToDelete(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Excluir Produto</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Modal */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-[#16191D] border border-red-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-500">
+              <div className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-serif font-bold text-slate-900 dark:text-white">
+                Excluir {selectedIds.length} Produtos
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Tem certeza que deseja apagar os <strong>{selectedIds.length}</strong> produtos selecionados do almoxarifado?
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 dark:bg-[#1C2128] text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#252C36] transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Confirmar Exclusão em Massa</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Products Modal */}
+      {isClearAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-[#16191D] border border-red-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-500">
+              <div className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/20">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-serif font-bold text-slate-900 dark:text-white">
+                Limpar Todo o Catálogo
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Atenção: Esta ação apagará <strong>todos os produtos cadastrados ({products.length})</strong> no sistema. Deseja continuar?
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 dark:bg-[#1C2128] text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#252C36] transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sim, Limpar Todo o Catálogo</span>
               </button>
             </div>
           </div>

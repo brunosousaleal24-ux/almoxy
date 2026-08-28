@@ -50,7 +50,7 @@ export const LoginScreen: React.FC = () => {
       </div>
 
       {/* Top Brand Bar */}
-      <header className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+      <header className="relative z-10 w-full max-w-[1720px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14 py-5 flex items-center justify-between">
         <div className="bg-[#0D131F]/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-amber-500/30 shadow-lg">
           <BorgesGomesLogo size="md" showSubtitle={true} />
         </div>
@@ -187,7 +187,7 @@ export const LoginScreen: React.FC = () => {
       </main>
 
       {/* Footer Info */}
-      <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-4 text-center text-xs text-slate-400 font-mono">
+      <footer className="relative z-10 w-full max-w-[1720px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14 py-4 text-center text-xs text-slate-400 font-mono">
         © {new Date().getFullYear()} Borges & Gomes Engenharia. Todos os direitos reservados. Acesso restrito a colaboradores autorizados.
       </footer>
     </div>

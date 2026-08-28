@@ -14,6 +14,7 @@ import {
   EmployeeRanking,
   ConstructionSite,
   ToolCaution,
+  Employee,
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -22,6 +23,7 @@ import {
   INITIAL_SETTINGS,
   INITIAL_CONSTRUCTION_SITES,
   INITIAL_CAUTIONS,
+  INITIAL_EMPLOYEES,
 } from '../data/initialData';
 import {
   firebaseConfig,
@@ -31,6 +33,7 @@ import {
   saveProductToFirestore,
   saveMovementToFirestore,
   saveSupplierToFirestore,
+  saveEmployeeToFirestore,
   saveSettingsToFirestore,
   handleFirestoreError,
   OperationType,
@@ -63,6 +66,14 @@ interface InventoryContextType {
   toolsRanking: ToolUsageRanking[];
   employeeRanking: EmployeeRanking[];
 
+  // Funcionários
+  employees: Employee[];
+  addEmployee: (data: Omit<Employee, 'id' | 'createdAt'>) => Employee;
+  updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  deleteEmployee: (id: string) => void;
+  deleteEmployeesBulk: (ids: string[]) => void;
+  clearAllEmployees: () => void;
+
   // Obras & Cautelas
   constructionSites: ConstructionSite[];
   toolCautions: ToolCaution[];
@@ -90,6 +101,8 @@ interface InventoryContextType {
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'lastMovementDate'>) => Product;
   updateProduct: (id: string, updates: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
+  deleteProductsBulk: (ids: string[]) => void;
+  clearAllProducts: () => void;
   getProductByBarcodeOrSku: (code: string) => Product | undefined;
 
   // Movement Actions
@@ -105,13 +118,23 @@ interface InventoryContextType {
     notes?: string;
     unitCost?: number;
   }) => { success: boolean; movement?: StockMovement; error?: string };
+  deleteMovement: (id: string, revertStock?: boolean) => { success: boolean; error?: string };
+  deleteMovementsBulk: (ids: string[], revertStock?: boolean) => void;
+  clearAllMovements: () => void;
 
   // Supplier & Price API Actions
   addSupplier: (supplier: Omit<Supplier, 'id'>) => void;
   updateSupplier: (id: string, updates: Partial<Supplier>) => void;
+  deleteSupplier: (id: string) => void;
   fetchExternalSupplierQuotes: () => Promise<SupplierPriceQuote[]>;
   applySupplierPriceUpdate: (productId: string, newCostPrice: number) => void;
   applyAllSupplierPriceUpdates: () => void;
+
+  // Cautelas
+  deleteCaution: (id: string, revertStockIfInUse?: boolean) => void;
+  clearFinishedCautions: () => void;
+  clearAllCautions: () => void;
+  clearAllSites: () => void;
 
   // Settings & Theme
   updateSettings: (updates: Partial<AppSettings>) => void;
@@ -121,6 +144,7 @@ interface InventoryContextType {
   // Backup & Sync Actions
   syncNow: () => Promise<void>;
   createCloudBackup: () => CloudBackupRecord;
+  deleteBackupRecord: (id: string) => void;
   exportDatabaseJson: () => void;
   importDatabaseJson: (jsonString: string) => boolean;
   resetToDefaults: () => void;
@@ -128,6 +152,7 @@ interface InventoryContextType {
   // Audio / Feedback
   playBeepSound: (type?: 'success' | 'warning' | 'error') => void;
   dismissAlert: (alertId: string) => void;
+  clearAllAlerts: () => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | null>(null);
@@ -136,6 +161,7 @@ const STORAGE_KEYS = {
   PRODUCTS: 'almoxarifado_products_v2',
   MOVEMENTS: 'almoxarifado_movements_v2',
   SUPPLIERS: 'almoxarifado_suppliers_v2',
+  EMPLOYEES: 'almoxarifado_employees_v2',
   CONSTRUCTION_SITES: 'almoxarifado_sites_v2',
   TOOL_CAUTIONS: 'almoxarifado_cautions_v2',
   SETTINGS: 'almoxarifado_settings_v2',
@@ -215,6 +241,15 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   });
 
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.EMPLOYEES);
+      return saved ? JSON.parse(saved) : INITIAL_EMPLOYEES;
+    } catch {
+      return INITIAL_EMPLOYEES;
+    }
+  });
+
   const [constructionSites, setConstructionSites] = useState<ConstructionSite[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CONSTRUCTION_SITES);
@@ -290,6 +325,10 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers));
   }, [suppliers]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(employees));
+  }, [employees]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CONSTRUCTION_SITES, JSON.stringify(constructionSites));
@@ -394,9 +433,27 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         handleFirestoreError(err, OperationType.LIST, 'movements');
       });
 
+      const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudEmps: Employee[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data() as Employee;
+            if (data.id && data.name) {
+              cloudEmps.push(data);
+            }
+          });
+          if (cloudEmps.length > 0) {
+            setEmployees(cloudEmps);
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'employees');
+      });
+
       return () => {
         unsubProducts();
         unsubMovements();
+        unsubEmployees();
       };
     } catch (e) {
       console.warn('Firestore snapshot setup error:', e);
@@ -676,6 +733,104 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     playBeepSound('warning');
   }, [playBeepSound]);
 
+  const deleteProductsBulk = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setProducts((prev) => prev.filter((p) => !idSet.has(p.id)));
+    ids.forEach((id) => {
+      try {
+        deleteDoc(doc(db, 'products', id));
+      } catch (e) {
+        console.warn('Bulk delete product error:', e);
+      }
+    });
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const clearAllProducts = useCallback(() => {
+    setProducts([]);
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const deleteMovement = useCallback((id: string, revertStock: boolean = true) => {
+    const movToDelete = movements.find((m) => m.id === id);
+    if (!movToDelete) {
+      return { success: false, error: 'Movimentação não encontrada.' };
+    }
+
+    // Revert stock if requested
+    if (revertStock) {
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id === movToDelete.productId) {
+            let adjustedStock = p.currentStock;
+            if (movToDelete.type === 'ENTRADA') {
+              adjustedStock = Math.max(0, p.currentStock - movToDelete.quantity);
+            } else if (movToDelete.type === 'SAIDA') {
+              adjustedStock = p.currentStock + movToDelete.quantity;
+            } else if (movToDelete.type === 'AJUSTE') {
+              adjustedStock = movToDelete.previousStock;
+            }
+            const updated = { ...p, currentStock: adjustedStock, updatedAt: new Date().toISOString() };
+            saveProductToFirestore(updated);
+            return updated;
+          }
+          return p;
+        })
+      );
+    }
+
+    setMovements((prev) => prev.filter((m) => m.id !== id));
+    try {
+      deleteDoc(doc(db, 'movements', id));
+    } catch (e) {
+      console.warn('Delete movement firestore error:', e);
+    }
+
+    playBeepSound('warning');
+    return { success: true };
+  }, [movements, playBeepSound]);
+
+  const deleteMovementsBulk = useCallback((ids: string[], revertStock: boolean = false) => {
+    const idSet = new Set(ids);
+    if (revertStock) {
+      const toDelete = movements.filter((m) => idSet.has(m.id));
+      toDelete.forEach((m) => {
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id === m.productId) {
+              let adjustedStock = p.currentStock;
+              if (m.type === 'ENTRADA') {
+                adjustedStock = Math.max(0, p.currentStock - m.quantity);
+              } else if (m.type === 'SAIDA') {
+                adjustedStock = p.currentStock + m.quantity;
+              }
+              const updated = { ...p, currentStock: adjustedStock, updatedAt: new Date().toISOString() };
+              saveProductToFirestore(updated);
+              return updated;
+            }
+            return p;
+          })
+        );
+      });
+    }
+
+    setMovements((prev) => prev.filter((m) => !idSet.has(m.id)));
+    ids.forEach((id) => {
+      try {
+        deleteDoc(doc(db, 'movements', id));
+      } catch (e) {
+        console.warn('Bulk delete movement firestore error:', e);
+      }
+    });
+
+    playBeepSound('warning');
+  }, [movements, playBeepSound]);
+
+  const clearAllMovements = useCallback(() => {
+    setMovements([]);
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
   const getProductByBarcodeOrSku = useCallback(
     (code: string): Product | undefined => {
       const cleanCode = code.trim().toLowerCase();
@@ -949,14 +1104,130 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setSuppliers((prev) =>
       prev.map((s) => {
         if (s.id === id) {
-          const upd = { ...s, ...updates };
-          saveSupplierToFirestore(upd);
-          return upd;
+          const updated = { ...s, ...updates };
+          saveSupplierToFirestore(updated);
+          return updated;
         }
         return s;
       })
     );
     playBeepSound('success');
+  }, [playBeepSound]);
+
+  const deleteSupplier = useCallback((id: string) => {
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+    try {
+      deleteDoc(doc(db, 'suppliers', id));
+    } catch (e) {
+      console.warn('Delete supplier error:', e);
+    }
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  // Employee Actions
+  const addEmployee = useCallback((employeeData: Omit<Employee, 'id' | 'createdAt'>) => {
+    const newEmployee: Employee = {
+      ...employeeData,
+      id: `emp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setEmployees((prev) => [newEmployee, ...prev]);
+    saveEmployeeToFirestore(newEmployee);
+    playBeepSound('success');
+    return newEmployee;
+  }, [playBeepSound]);
+
+  const updateEmployee = useCallback((id: string, updates: Partial<Employee>) => {
+    setEmployees((prev) =>
+      prev.map((e) => {
+        if (e.id === id) {
+          const updated = { ...e, ...updates };
+          saveEmployeeToFirestore(updated);
+          return updated;
+        }
+        return e;
+      })
+    );
+    playBeepSound('success');
+  }, [playBeepSound]);
+
+  const deleteEmployee = useCallback((id: string) => {
+    setEmployees((prev) => prev.filter((e) => e.id !== id));
+    try {
+      deleteDoc(doc(db, 'employees', id));
+    } catch (e) {
+      console.warn('Delete employee error:', e);
+    }
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const deleteEmployeesBulk = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setEmployees((prev) => prev.filter((e) => !idSet.has(e.id)));
+    ids.forEach((id) => {
+      try {
+        deleteDoc(doc(db, 'employees', id));
+      } catch (e) {
+        console.warn('Delete employee bulk error:', e);
+      }
+    });
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const clearAllEmployees = useCallback(() => {
+    employees.forEach((e) => {
+      try {
+        deleteDoc(doc(db, 'employees', e.id));
+      } catch (err) {
+        console.warn('Clear employee error:', err);
+      }
+    });
+    setEmployees([]);
+    playBeepSound('warning');
+  }, [employees, playBeepSound]);
+
+  const deleteCaution = useCallback((id: string, revertStockIfInUse: boolean = true) => {
+    const caution = toolCautions.find((c) => c.id === id);
+    if (caution && caution.status === 'EM_USO' && revertStockIfInUse) {
+      // Revert stock of tool back (+1)
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id === caution.toolId) {
+            const updated = { ...p, currentStock: p.currentStock + 1, updatedAt: new Date().toISOString() };
+            saveProductToFirestore(updated);
+            return updated;
+          }
+          return p;
+        })
+      );
+    }
+    setToolCautions((prev) => prev.filter((c) => c.id !== id));
+    playBeepSound('warning');
+  }, [toolCautions, playBeepSound]);
+
+  const clearFinishedCautions = useCallback(() => {
+    setToolCautions((prev) => prev.filter((c) => c.status === 'EM_USO'));
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const clearAllCautions = useCallback(() => {
+    setToolCautions([]);
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const clearAllSites = useCallback(() => {
+    setConstructionSites([]);
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const deleteBackupRecord = useCallback((id: string) => {
+    setBackupHistory((prev) => prev.filter((b) => b.id !== id));
+    playBeepSound('warning');
+  }, [playBeepSound]);
+
+  const clearAllAlerts = useCallback(() => {
+    setAlerts([]);
+    playBeepSound('warning');
   }, [playBeepSound]);
 
   const fetchExternalSupplierQuotes = useCallback(async (): Promise<SupplierPriceQuote[]> => {
@@ -1220,6 +1491,12 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         stats,
         toolsRanking,
         employeeRanking,
+        employees,
+        addEmployee,
+        updateEmployee,
+        deleteEmployee,
+        deleteEmployeesBulk,
+        clearAllEmployees,
         constructionSites,
         toolCautions,
         addConstructionSite,
@@ -1232,23 +1509,35 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addProduct,
         updateProduct,
         deleteProduct,
+        deleteProductsBulk,
+        clearAllProducts,
         getProductByBarcodeOrSku,
         registerMovement,
+        deleteMovement,
+        deleteMovementsBulk,
+        clearAllMovements,
         addSupplier,
         updateSupplier,
+        deleteSupplier,
         fetchExternalSupplierQuotes,
         applySupplierPriceUpdate,
         applyAllSupplierPriceUpdates,
+        deleteCaution,
+        clearFinishedCautions,
+        clearAllCautions,
+        clearAllSites,
         updateSettings,
         toggleTheme,
         setTheme,
         syncNow,
         createCloudBackup,
+        deleteBackupRecord,
         exportDatabaseJson,
         importDatabaseJson,
         resetToDefaults,
         playBeepSound,
         dismissAlert,
+        clearAllAlerts,
       }}
     >
       {children}

@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Tag,
   Hammer,
+  Trash2,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { ToolCaution, Product } from '../types';
@@ -24,15 +25,20 @@ export const CautelasView: React.FC = () => {
   const {
     products,
     toolCautions,
+    employees,
     constructionSites,
     checkoutToolCaution,
     returnToolCaution,
+    deleteCaution,
+    clearFinishedCautions,
+    clearAllCautions,
   } = useInventory();
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'EM_USO' | 'DEVOLVIDA' | 'ATRASADA' | 'AVARIADA'>('ALL');
   const [siteFilter, setSiteFilter] = useState('ALL');
+  const [cautionToDelete, setCautionToDelete] = useState<ToolCaution | null>(null);
 
   // Checkout Modal State
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
@@ -165,14 +171,46 @@ export const CautelasView: React.FC = () => {
             </p>
           </div>
 
-          <button
-            id="btn-new-caution"
-            onClick={() => setIsCheckoutModalOpen(true)}
-            className="brand-gradient-btn flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-amber-900/30 whitespace-nowrap cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Nova Cautela / Empréstimo
-          </button>
+          <div className="flex items-center gap-2">
+            {toolCautions.some((c) => c.status !== 'EM_USO') && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Deseja limpar todas as cautelas já devolvidas / encerradas do histórico?')) {
+                    clearFinishedCautions();
+                  }
+                }}
+                className="px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-600 transition cursor-pointer"
+                title="Limpar apenas as cautelas já devolvidas"
+              >
+                Limpar Devolvidas
+              </button>
+            )}
+
+            {toolCautions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Tem certeza que deseja apagar todas as cautelas registradas?')) {
+                    clearAllCautions();
+                  }
+                }}
+                className="p-2.5 bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 rounded-xl transition cursor-pointer"
+                title="Apagar todas as cautelas"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+
+            <button
+              id="btn-new-caution"
+              onClick={() => setIsCheckoutModalOpen(true)}
+              className="brand-gradient-btn flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-amber-900/30 whitespace-nowrap cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Nova Cautela / Empréstimo
+            </button>
+          </div>
         </div>
 
         {/* Quick KPI Bar */}
@@ -327,20 +365,31 @@ export const CautelasView: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4 text-right">
-                        {c.status === 'EM_USO' ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {c.status === 'EM_USO' ? (
+                            <button
+                              id={`btn-return-caution-${c.id}`}
+                              onClick={() => setReturningCaution(c)}
+                              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              Devolver
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 font-mono">
+                              {c.returnedDate ? `Em ${new Date(c.returnedDate).toLocaleDateString('pt-BR')}` : '-'}
+                            </span>
+                          )}
+
                           <button
-                            id={`btn-return-caution-${c.id}`}
-                            onClick={() => setReturningCaution(c)}
-                            className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition cursor-pointer"
+                            type="button"
+                            onClick={() => setCautionToDelete(c)}
+                            className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition cursor-pointer"
+                            title="Apagar cautela"
                           >
-                            <RotateCcw className="w-3 h-3" />
-                            Devolver
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 font-mono">
-                            {c.returnedDate ? `Em ${new Date(c.returnedDate).toLocaleDateString('pt-BR')}` : '-'}
-                          </span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -405,11 +454,30 @@ export const CautelasView: React.FC = () => {
                   <input
                     type="text"
                     required
-                    placeholder="Ex: João da Silva"
+                    list="registered-employees-list"
+                    placeholder="Ex: João da Silva ou escolha na lista"
                     value={employeeName}
-                    onChange={(e) => setEmployeeName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEmployeeName(val);
+                      const matched = employees.find(
+                        (emp) => emp.name.toLowerCase() === val.toLowerCase() || emp.registrationNumber.toLowerCase() === val.toLowerCase()
+                      );
+                      if (matched) {
+                        setEmployeeName(matched.name);
+                        setEmployeeRole(matched.role);
+                        setEmployeeSector(matched.sector);
+                      }
+                    }}
                     className="editorial-input w-full p-2.5 rounded-xl"
                   />
+                  <datalist id="registered-employees-list">
+                    {employees.filter((emp) => emp.active).map((emp) => (
+                      <option key={emp.id} value={emp.name}>
+                        {emp.registrationNumber} — {emp.role} ({emp.sector})
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
@@ -592,6 +660,53 @@ export const CautelasView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Caution Confirmation Modal */}
+      {cautionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white dark:bg-[#16191D] border border-red-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-500">
+              <div className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-serif font-bold text-slate-900 dark:text-white">
+                Apagar Cautela
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Tem certeza que deseja apagar o registro da cautela de <strong>{cautionToDelete.toolName}</strong> para <strong>{cautionToDelete.employeeName}</strong>?
+            </p>
+
+            {cautionToDelete.status === 'EM_USO' && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                ℹ️ Como a ferramenta estava em uso, a unidade será estornada de volta ao saldo disponível em estoque.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCautionToDelete(null)}
+                className="px-4 py-2 bg-slate-100 dark:bg-[#1C2128] text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#252C36] transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteCaution(cautionToDelete.id, true);
+                  setCautionToDelete(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Apagar Cautela</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
