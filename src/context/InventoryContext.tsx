@@ -43,10 +43,11 @@ import {
   saveToolCautionToFirestore,
   deleteToolCautionFromFirestore,
   saveSettingsToFirestore,
+  broadcastAllDataToFirestore,
   handleFirestoreError,
   OperationType,
 } from '../lib/firebase';
-import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 export interface FirebaseStatusInfo {
   connected: boolean;
@@ -54,6 +55,14 @@ export interface FirebaseStatusInfo {
   lastSyncTime: string;
   isSyncing: boolean;
   message: string;
+}
+
+export interface SyncToastInfo {
+  show: boolean;
+  type: 'success' | 'error' | 'info';
+  message: string;
+  timestamp: string;
+  triggeredBy?: string;
 }
 
 interface InventoryContextType {
@@ -69,6 +78,11 @@ interface InventoryContextType {
   pendingSyncCount: number;
   lastSyncTime: string;
   stats: InventoryStats;
+  syncToast: SyncToastInfo | null;
+  dismissSyncToast: () => void;
+
+  // Multi-device broadcast sync
+  broadcastSyncToAllDevices: (triggeredBy?: string) => Promise<{ success: boolean; totalItems: number; timestamp: string; message: string }>;
 
   // Rankings
   toolsRanking: ToolUsageRanking[];
@@ -304,8 +318,13 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEYS.LAST_SYNC) || new Date().toISOString();
   });
+  const [syncToast, setSyncToast] = useState<SyncToastInfo | null>(null);
   const [supplierQuotes, setSupplierQuotes] = useState<SupplierPriceQuote[]>([]);
   const [alerts, setAlerts] = useState<StockAlert[]>([]);
+
+  const dismissSyncToast = useCallback(() => {
+    setSyncToast(null);
+  }, []);
 
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatusInfo>({
     connected: false,
@@ -520,6 +539,19 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         handleFirestoreError(err, OperationType.GET, 'settings/global_config');
       });
 
+      // Real-time broadcast signal from other devices
+      const unsubBroadcast = onSnapshot(doc(db, 'system_sync', 'broadcast_state'), (docSnap) => {
+        if (docSnap.exists()) {
+          const syncData = docSnap.data() as any;
+          if (syncData?.timestamp) {
+            setLastSyncTime(syncData.timestamp);
+            localStorage.setItem(STORAGE_KEYS.LAST_SYNC, syncData.timestamp);
+          }
+        }
+      }, (err) => {
+        console.warn('Broadcast sync listener warning:', err);
+      });
+
       return () => {
         unsubProducts();
         unsubMovements();
@@ -528,6 +560,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         unsubSites();
         unsubCautions();
         unsubSettings();
+        unsubBroadcast();
       };
     } catch (e) {
       console.warn('Firestore snapshot setup error:', e);
@@ -1379,51 +1412,80 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   }, []);
 
-  const syncWithFirebase = useCallback(async () => {
+  const broadcastSyncToAllDevices = useCallback(async (triggeredBy?: string) => {
     setIsSyncing(true);
-    setFirebaseStatus((prev) => ({ ...prev, isSyncing: true, message: 'Sincronizando com Firestore...' }));
-    
+    setFirebaseStatus((prev) => ({
+      ...prev,
+      isSyncing: true,
+      message: 'Transmitindo base de dados para todos os aparelhos...',
+    }));
+
     try {
-      const res = await testFirestoreConnection();
-      if (res.connected) {
-        await seedInitialFirestoreData(products, movements, suppliers);
-        const nowIso = new Date().toISOString();
+      const res = await broadcastAllDataToFirestore({
+        products,
+        movements,
+        suppliers,
+        employees,
+        constructionSites,
+        toolCautions,
+        settings,
+        triggeredBy: triggeredBy || 'Operador',
+      });
+
+      if (res.success) {
+        const nowIso = res.timestamp;
         setLastSyncTime(nowIso);
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC, nowIso);
         setFirebaseStatus({
           connected: true,
           projectId: firebaseConfig.projectId,
           lastSyncTime: nowIso,
           isSyncing: false,
-          message: `Sincronizado com sucesso com Firebase (${firebaseConfig.projectId})`,
+          message: `Transmitido com sucesso! ${res.totalItems} registros enviados para todos os dispositivos.`,
+        });
+        setSyncToast({
+          show: true,
+          type: 'success',
+          message: `Transmitido para todos os dispositivos! (${res.totalItems} itens)`,
+          timestamp: nowIso,
+          triggeredBy: triggeredBy || 'Operador',
         });
         playBeepSound('success');
+        return res;
       } else {
-        setFirebaseStatus({
-          connected: false,
-          projectId: firebaseConfig.projectId,
-          lastSyncTime: new Date().toISOString(),
-          isSyncing: false,
-          message: 'Falha ao sincronizar com Firebase: ' + res.message,
+        setFirebaseStatus((prev) => ({ ...prev, isSyncing: false, message: res.message }));
+        setSyncToast({
+          show: true,
+          type: 'error',
+          message: res.message,
+          timestamp: new Date().toISOString(),
         });
         playBeepSound('error');
+        return res;
       }
-    } catch (e: any) {
-      setFirebaseStatus({
-        connected: false,
-        projectId: firebaseConfig.projectId,
-        lastSyncTime: new Date().toISOString(),
-        isSyncing: false,
-        message: 'Erro: ' + (e?.message || 'Falha de conexão'),
+    } catch (err: any) {
+      const msg = err?.message || 'Falha ao sincronizar com dispositivos';
+      setFirebaseStatus((prev) => ({ ...prev, isSyncing: false, message: msg }));
+      setSyncToast({
+        show: true,
+        type: 'error',
+        message: msg,
+        timestamp: new Date().toISOString(),
       });
       playBeepSound('error');
+      return { success: false, totalItems: 0, timestamp: new Date().toISOString(), message: msg };
     } finally {
       setIsSyncing(false);
     }
-  }, [products, movements, suppliers, playBeepSound]);
+  }, [products, movements, suppliers, employees, constructionSites, toolCautions, settings, playBeepSound]);
+
+  const syncWithFirebase = useCallback(async () => {
+    await broadcastSyncToAllDevices('Sincronização Manual');
+  }, [broadcastSyncToAllDevices]);
 
   const syncNow = useCallback(async () => {
-    await syncWithFirebase();
-  }, [syncWithFirebase]);
+    await broadcastSyncToAllDevices('Sincronização Rápida');
+  }, [broadcastSyncToAllDevices]);
 
   const createCloudBackup = useCallback((): CloudBackupRecord => {
     const snapshot = {
@@ -1588,6 +1650,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         toggleTheme,
         setTheme,
         syncNow,
+        broadcastSyncToAllDevices,
+        syncToast,
+        dismissSyncToast,
         createCloudBackup,
         deleteBackupRecord,
         exportDatabaseJson,

@@ -21,6 +21,14 @@ import {
   Moon,
   Monitor,
   Palette,
+  Radio,
+  Smartphone,
+  Laptop,
+  Layers,
+  Send,
+  Wifi,
+  Sparkles,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { useAuth } from '../context/AuthContext';
@@ -40,13 +48,41 @@ export const SettingsBackupView: React.FC = () => {
     resetToDefaults,
     isSyncing,
     lastSyncTime,
+    broadcastSyncToAllDevices,
+    firebaseStatus,
+    products,
+    movements,
+    suppliers,
+    employees,
+    constructionSites,
+    toolCautions,
   } = useInventory();
 
   const { currentUser, userProfile, logout, isAuthenticated } = useAuth();
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [broadcastResult, setBroadcastResult] = useState<{
+    success: boolean;
+    totalItems: number;
+    timestamp: string;
+    message: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleBroadcastAll = async () => {
+    const operatorName = currentUser?.displayName || currentUser?.email || 'Operador Principal';
+    const result = await broadcastSyncToAllDevices(operatorName);
+    setBroadcastResult(result);
+    if (result.success) {
+      setSuccessMessage(`Base de dados transmitida com sucesso! ${result.totalItems} registros sincronizados em todos os celulares e computadores.`);
+    } else {
+      setSuccessMessage(`Falha na transmissão: ${result.message}`);
+    }
+    setTimeout(() => {
+      setSuccessMessage(null);
+    }, 6000);
+  };
 
   const handleManualBackup = () => {
     createCloudBackup();
@@ -72,24 +108,32 @@ export const SettingsBackupView: React.FC = () => {
     reader.readAsText(file);
   };
 
+  const totalRecords =
+    products.length +
+    movements.length +
+    suppliers.length +
+    employees.length +
+    constructionSites.length +
+    toolCautions.length;
+
   return (
     <div className="space-y-6 pb-12 font-sans">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="font-serif text-2xl font-bold text-slate-900 dark:text-[#F9FAFB] flex items-center gap-2.5">
-            <Cloud className="w-5 h-5 text-amber-500" />
-            Backup em Nuvem & Configurações Globais
+            <Radio className="w-6 h-6 text-amber-500 animate-pulse" />
+            Transmissão & Sincronização de Dispositivos (PC & Celular)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Persistência segura, snapshots automáticos na nuvem, exportação/restauração em JSON e personalização corporativa.
+            Central de sincronismo em tempo real para manter celulares, tablets e computadores sempre com a mesma base de dados.
           </p>
         </div>
       </div>
 
       {successMessage && (
-        <div className="p-3 bg-emerald-50 dark:bg-[#141B17] border border-emerald-200 dark:border-emerald-900/60 rounded-xl text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2 font-medium">
-          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        <div className="p-3.5 bg-emerald-50 dark:bg-[#141B17] border border-emerald-200 dark:border-emerald-900/60 rounded-xl text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5 font-medium shadow-sm animate-fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
@@ -100,6 +144,122 @@ export const SettingsBackupView: React.FC = () => {
           <span>{importStatus}</span>
         </div>
       )}
+
+      {/* Hero Card: Broadcast Sync to All Devices */}
+      <div className="relative overflow-hidden p-6 sm:p-7 rounded-2xl bg-gradient-to-br from-[#0F172A] via-[#111C2E] to-[#1E1A0F] border border-amber-500/40 shadow-2xl text-white">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  Sincronização Total Multi-Dispositivo
+                </span>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Base ID: <strong className="text-amber-300">{firebaseConfig.projectId}</strong>
+                </span>
+              </div>
+              <h3 className="font-serif font-black text-xl sm:text-2xl text-white tracking-wide">
+                Atualizar Todos os Dispositivos Conectados
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+                Ao clicar no botão abaixo, toda e qualquer alteração feita neste computador ou celular (produtos, movimentações, obras, funcionários, cautelas e fornecedores) é imediatamente <strong>transmitida e gravada na nuvem do Firebase</strong>, atualizando todos os outros aparelhos conectados em tempo real.
+              </p>
+            </div>
+
+            {/* Big Action Button */}
+            <button
+              id="btn-broadcast-all-devices"
+              onClick={handleBroadcastAll}
+              disabled={isSyncing}
+              className="brand-gradient-btn px-6 py-3.5 rounded-xl text-slate-950 font-black text-sm shadow-xl flex items-center justify-center gap-2.5 transition active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
+            >
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin text-slate-950" />
+                  <span>Transmitindo Dados...</span>
+                </>
+              ) : (
+                <>
+                  <Radio className="w-5 h-5 text-slate-950" />
+                  <span>Atualizar Todos os Dispositivos</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Quick Metrics of Sync Payload */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block">Produtos</span>
+              <strong className="text-base sm:text-lg font-mono text-amber-400 font-bold">{products.length}</strong>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block">Movimentações</span>
+              <strong className="text-base sm:text-lg font-mono text-emerald-400 font-bold">{movements.length}</strong>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block">Cautelas Ativas</span>
+              <strong className="text-base sm:text-lg font-mono text-cyan-400 font-bold">{toolCautions.length}</strong>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block">Funcionários</span>
+              <strong className="text-base sm:text-lg font-mono text-indigo-400 font-bold">{employees.length}</strong>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block">Obras / Frentes</span>
+              <strong className="text-base sm:text-lg font-mono text-purple-400 font-bold">{constructionSites.length}</strong>
+            </div>
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
+              <span className="text-[10px] uppercase font-mono text-slate-400 block">Total de Registros</span>
+              <strong className="text-base sm:text-lg font-mono text-amber-300 font-black">{totalRecords}</strong>
+            </div>
+          </div>
+
+          {/* Connected Network Diagram */}
+          <div className="p-4 rounded-xl bg-black/40 border border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <Laptop className="w-5 h-5" />
+              </div>
+              <div>
+                <strong className="block text-white font-medium">Computadores & Desktops</strong>
+                <span className="text-[11px] text-slate-400">Escritório & Almoxarifado Central</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-amber-400 font-mono text-xs">
+              <ArrowLeftRight className="w-4 h-4 animate-pulse" />
+              <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px]">
+                Firestore Realtime Channel
+              </span>
+              <ArrowLeftRight className="w-4 h-4 animate-pulse" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <strong className="block text-white font-medium">Celulares & Smartphones</strong>
+                <span className="text-[11px] text-slate-400">Pátio de Obras & Leitor por Câmera</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sync status footer note */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1 border-t border-white/10 text-[11px] text-slate-400 font-mono">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Status: <strong className="text-emerald-400">{firebaseStatus.message || 'Pronto para transmissão'}</strong></span>
+            </div>
+            <div>
+              Última transmissão: <strong className="text-amber-300">{formatDate(lastSyncTime)}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Main Grid: Backup Cloud + General Settings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

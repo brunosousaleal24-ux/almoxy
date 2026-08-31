@@ -322,3 +322,80 @@ export async function saveSettingsToFirestore(settings: AppSettings) {
     handleFirestoreError(err, OperationType.WRITE, 'settings/global_config');
   }
 }
+
+// Broadcast ALL data to Firestore & ping all connected devices
+export async function broadcastAllDataToFirestore(payload: {
+  products: Product[];
+  movements: StockMovement[];
+  suppliers: Supplier[];
+  employees: Employee[];
+  constructionSites: ConstructionSite[];
+  toolCautions: ToolCaution[];
+  settings: AppSettings;
+  triggeredBy?: string;
+}): Promise<{ success: boolean; totalItems: number; timestamp: string; message: string }> {
+  try {
+    const { products, movements, suppliers, employees, constructionSites, toolCautions, settings, triggeredBy } = payload;
+    const nowIso = new Date().toISOString();
+
+    // 1. Commit in chunked batches to respect Firestore 500 operations per batch limit
+    const allOperations: { col: string; id: string; data: any }[] = [];
+
+    products.forEach((p) => allOperations.push({ col: 'products', id: p.id, data: { ...p, _syncedAt: nowIso } }));
+    movements.forEach((m) => allOperations.push({ col: 'movements', id: m.id, data: { ...m, _syncedAt: nowIso } }));
+    suppliers.forEach((s) => allOperations.push({ col: 'suppliers', id: s.id, data: { ...s, _syncedAt: nowIso } }));
+    employees.forEach((e) => allOperations.push({ col: 'employees', id: e.id, data: { ...e, _syncedAt: nowIso } }));
+    constructionSites.forEach((cs) => allOperations.push({ col: 'constructionSites', id: cs.id, data: { ...cs, _syncedAt: nowIso } }));
+    toolCautions.forEach((tc) => allOperations.push({ col: 'toolCautions', id: tc.id, data: { ...tc, _syncedAt: nowIso } }));
+
+    // Chunk size 400
+    const chunkSize = 400;
+    for (let i = 0; i < allOperations.length; i += chunkSize) {
+      const chunk = allOperations.slice(i, i + chunkSize);
+      const batch = writeBatch(db);
+      chunk.forEach((item) => {
+        const ref = doc(db, item.col, item.id);
+        batch.set(ref, item.data, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    // 2. Save settings
+    const settingsRef = doc(db, 'settings', 'global_config');
+    await setDoc(settingsRef, { ...settings, _lastBroadcastAt: nowIso, _savedAt: serverTimestamp() }, { merge: true });
+
+    // 3. Write broadcast trigger signal for all connected devices
+    const broadcastRef = doc(db, 'system_sync', 'broadcast_state');
+    await setDoc(broadcastRef, {
+      timestamp: nowIso,
+      _serverTime: serverTimestamp(),
+      triggeredBy: triggeredBy || 'Operador Central',
+      summary: {
+        products: products.length,
+        movements: movements.length,
+        suppliers: suppliers.length,
+        employees: employees.length,
+        constructionSites: constructionSites.length,
+        toolCautions: toolCautions.length,
+        totalItems: allOperations.length,
+      },
+      message: 'Base de dados atualizada e sincronizada com todos os dispositivos',
+    });
+
+    return {
+      success: true,
+      totalItems: allOperations.length,
+      timestamp: nowIso,
+      message: `Transmitido com sucesso! ${allOperations.length} registros sincronizados para todos os aparelhos.`,
+    };
+  } catch (err: any) {
+    console.error('Error broadcasting data to Firestore:', err);
+    handleFirestoreError(err, OperationType.WRITE, 'broadcast_all_data');
+    return {
+      success: false,
+      totalItems: 0,
+      timestamp: new Date().toISOString(),
+      message: err?.message || 'Erro ao sincronizar dados com o Firebase',
+    };
+  }
+}

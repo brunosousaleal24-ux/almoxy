@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Package,
   Layers,
@@ -24,6 +24,11 @@ import {
   Building2,
   Wrench,
   Users,
+  Radio,
+  Smartphone,
+  Laptop,
+  Send,
+  X,
 } from 'lucide-react';
 import { useInventory } from '../context/InventoryContext';
 import { BorgesGomesLogo } from './BorgesGomesLogo';
@@ -66,6 +71,9 @@ export const Header: React.FC<HeaderProps> = ({
     isSyncing,
     pendingSyncCount,
     syncNow,
+    broadcastSyncToAllDevices,
+    syncToast,
+    dismissSyncToast,
     alerts,
     dismissAlert,
   } = useInventory();
@@ -74,6 +82,16 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Auto-dismiss syncToast after 6 seconds
+  useEffect(() => {
+    if (syncToast) {
+      const timer = setTimeout(() => {
+        dismissSyncToast();
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncToast, dismissSyncToast]);
 
   const criticalAlerts = alerts.filter((a) => a.severity === 'high');
 
@@ -109,14 +127,14 @@ export const Header: React.FC<HeaderProps> = ({
               {isOnline ? (
                 <button
                   id="btn-sync-status-indicator"
-                  onClick={() => syncNow()}
+                  onClick={() => broadcastSyncToAllDevices(currentUser?.displayName || currentUser?.email || 'Operador')}
                   disabled={isSyncing}
                   className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition cursor-pointer ${
                     pendingSyncCount > 0
                       ? 'bg-amber-950/60 text-amber-300 border-amber-500/50 shadow-sm'
                       : 'bg-[#0E1B15] text-emerald-300 border-emerald-500/40 shadow-sm'
                   }`}
-                  title={isSyncing ? 'Sincronizando...' : 'Online - Clique para sincronizar agora'}
+                  title={isSyncing ? 'Sincronizando...' : 'Online - Clique para transmitir a todos os aparelhos'}
                 >
                   <Wifi className="w-3.5 h-3.5 text-emerald-400" />
                   <span className="hidden lg:inline font-mono font-medium text-[11px]">
@@ -134,6 +152,19 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Broadcast Multi-Device Sync Button */}
+            <button
+              id="btn-header-broadcast-all"
+              onClick={() => broadcastSyncToAllDevices(currentUser?.displayName || currentUser?.email || 'Operador')}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 border border-amber-500/50 shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Transmitir toda a base de dados para celulares e computadores"
+            >
+              <Radio className={`w-3.5 h-3.5 text-amber-400 shrink-0 ${isSyncing ? 'animate-spin' : 'animate-pulse'}`} />
+              <span className="hidden xl:inline font-bold">Atualizar Celulares & PCs</span>
+              <span className="xl:hidden hidden md:inline font-bold">Transmitir</span>
+            </button>
 
             {/* Barcode Scanner Trigger Button */}
             <button
@@ -498,6 +529,43 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </nav>
       </div>
+
+      {/* Floating Multi-Device Sync Toast Notification */}
+      {syncToast && syncToast.show && (
+        <div
+          id="sync-toast-notification"
+          className="fixed top-16 right-3 sm:right-6 z-50 animate-bounce-in max-w-sm sm:max-w-md w-full p-4 rounded-2xl bg-[#090D17]/95 border border-amber-500/50 shadow-[0_10px_40px_rgba(0,0,0,0.8)] backdrop-blur-2xl text-white flex items-start gap-3"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/40">
+            {syncToast.type === 'success' ? (
+              <Radio className="w-5 h-5 text-emerald-400 animate-pulse" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-serif font-bold text-xs sm:text-sm text-white">
+                {syncToast.type === 'success' ? 'Transmissão em Tempo Real' : 'Aviso de Sincronização'}
+              </span>
+              <button
+                onClick={dismissSyncToast}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed break-words">
+              {syncToast.message}
+            </p>
+            <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400 font-mono">
+              <span className="text-emerald-400">● Celulares & PCs Conectados</span>
+              <span>•</span>
+              <span>{new Date(syncToast.timestamp).toLocaleTimeString('pt-BR')}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
