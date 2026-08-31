@@ -31,9 +31,17 @@ import {
   testFirestoreConnection,
   seedInitialFirestoreData,
   saveProductToFirestore,
+  deleteProductFromFirestore,
   saveMovementToFirestore,
+  deleteMovementFromFirestore,
   saveSupplierToFirestore,
+  deleteSupplierFromFirestore,
   saveEmployeeToFirestore,
+  deleteEmployeeFromFirestore,
+  saveConstructionSiteToFirestore,
+  deleteConstructionSiteFromFirestore,
+  saveToolCautionToFirestore,
+  deleteToolCautionFromFirestore,
   saveSettingsToFirestore,
   handleFirestoreError,
   OperationType,
@@ -368,7 +376,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       if (res.connected) {
         // Seed initial data if Firestore is empty
-        await seedInitialFirestoreData(products, movements, suppliers);
+        await seedInitialFirestoreData(products, movements, suppliers, employees, constructionSites, toolCautions);
       }
     };
 
@@ -403,9 +411,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (!snapshot.empty) {
           const cloudProds: Product[] = [];
           snapshot.forEach((d) => {
-            const data = d.data() as Product;
-            if (data.id && data.sku) {
-              cloudProds.push(data);
+            const data = d.data() as any;
+            if (data.id && data.sku && !data._deleted) {
+              cloudProds.push(data as Product);
             }
           });
           if (cloudProds.length > 0) {
@@ -420,9 +428,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (!snapshot.empty) {
           const cloudMovs: StockMovement[] = [];
           snapshot.forEach((d) => {
-            const data = d.data() as StockMovement;
-            if (data.id && data.productId) {
-              cloudMovs.push(data);
+            const data = d.data() as any;
+            if (data.id && data.productId && !data._deleted) {
+              cloudMovs.push(data as StockMovement);
             }
           });
           if (cloudMovs.length > 0) {
@@ -437,9 +445,9 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (!snapshot.empty) {
           const cloudEmps: Employee[] = [];
           snapshot.forEach((d) => {
-            const data = d.data() as Employee;
-            if (data.id && data.name) {
-              cloudEmps.push(data);
+            const data = d.data() as any;
+            if (data.id && data.name && !data._deleted) {
+              cloudEmps.push(data as Employee);
             }
           });
           if (cloudEmps.length > 0) {
@@ -450,10 +458,76 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         handleFirestoreError(err, OperationType.LIST, 'employees');
       });
 
+      const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudSups: Supplier[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data() as any;
+            if (data.id && data.name && !data._deleted) {
+              cloudSups.push(data as Supplier);
+            }
+          });
+          if (cloudSups.length > 0) {
+            setSuppliers(cloudSups);
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'suppliers');
+      });
+
+      const unsubSites = onSnapshot(collection(db, 'constructionSites'), (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudSites: ConstructionSite[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data() as any;
+            if (data.id && data.name && !data._deleted) {
+              cloudSites.push(data as ConstructionSite);
+            }
+          });
+          if (cloudSites.length > 0) {
+            setConstructionSites(cloudSites);
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'constructionSites');
+      });
+
+      const unsubCautions = onSnapshot(collection(db, 'toolCautions'), (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudCautions: ToolCaution[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data() as any;
+            if (data.id && data.toolName && !data._deleted) {
+              cloudCautions.push(data as ToolCaution);
+            }
+          });
+          if (cloudCautions.length > 0) {
+            setToolCautions(cloudCautions);
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'toolCautions');
+      });
+
+      const unsubSettings = onSnapshot(doc(db, 'settings', 'global_config'), (docSnap) => {
+        if (docSnap.exists()) {
+          const cloudSet = docSnap.data() as AppSettings;
+          if (cloudSet.companyName) {
+            setSettings((prev) => ({ ...prev, ...cloudSet }));
+          }
+        }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.GET, 'settings/global_config');
+      });
+
       return () => {
         unsubProducts();
         unsubMovements();
         unsubEmployees();
+        unsubSuppliers();
+        unsubSites();
+        unsubCautions();
+        unsubSettings();
       };
     } catch (e) {
       console.warn('Firestore snapshot setup error:', e);
@@ -725,11 +799,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const deleteProduct = useCallback((id: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== id));
-    try {
-      deleteDoc(doc(db, 'products', id));
-    } catch (e) {
-      console.warn('Delete product error:', e);
-    }
+    deleteProductFromFirestore(id);
     playBeepSound('warning');
   }, [playBeepSound]);
 
@@ -737,19 +807,16 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const idSet = new Set(ids);
     setProducts((prev) => prev.filter((p) => !idSet.has(p.id)));
     ids.forEach((id) => {
-      try {
-        deleteDoc(doc(db, 'products', id));
-      } catch (e) {
-        console.warn('Bulk delete product error:', e);
-      }
+      deleteProductFromFirestore(id);
     });
     playBeepSound('warning');
   }, [playBeepSound]);
 
   const clearAllProducts = useCallback(() => {
+    products.forEach((p) => deleteProductFromFirestore(p.id));
     setProducts([]);
     playBeepSound('warning');
-  }, [playBeepSound]);
+  }, [products, playBeepSound]);
 
   const deleteMovement = useCallback((id: string, revertStock: boolean = true) => {
     const movToDelete = movements.find((m) => m.id === id);
@@ -780,11 +847,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     setMovements((prev) => prev.filter((m) => m.id !== id));
-    try {
-      deleteDoc(doc(db, 'movements', id));
-    } catch (e) {
-      console.warn('Delete movement firestore error:', e);
-    }
+    deleteMovementFromFirestore(id);
 
     playBeepSound('warning');
     return { success: true };
@@ -816,20 +879,17 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     setMovements((prev) => prev.filter((m) => !idSet.has(m.id)));
     ids.forEach((id) => {
-      try {
-        deleteDoc(doc(db, 'movements', id));
-      } catch (e) {
-        console.warn('Bulk delete movement firestore error:', e);
-      }
+      deleteMovementFromFirestore(id);
     });
 
     playBeepSound('warning');
   }, [movements, playBeepSound]);
 
   const clearAllMovements = useCallback(() => {
+    movements.forEach((m) => deleteMovementFromFirestore(m.id));
     setMovements([]);
     playBeepSound('warning');
-  }, [playBeepSound]);
+  }, [movements, playBeepSound]);
 
   const getProductByBarcodeOrSku = useCallback(
     (code: string): Product | undefined => {
@@ -941,19 +1001,28 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       id: `site-${Date.now()}`,
     };
     setConstructionSites((prev) => [...prev, newSite]);
+    saveConstructionSiteToFirestore(newSite);
     playBeepSound('success');
     return newSite;
   }, [playBeepSound]);
 
   const updateConstructionSite = useCallback((id: string, updates: Partial<ConstructionSite>) => {
     setConstructionSites((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+      prev.map((s) => {
+        if (s.id === id) {
+          const updated = { ...s, ...updates };
+          saveConstructionSiteToFirestore(updated);
+          return updated;
+        }
+        return s;
+      })
     );
     playBeepSound('success');
   }, [playBeepSound]);
 
   const deleteConstructionSite = useCallback((id: string) => {
     setConstructionSites((prev) => prev.filter((s) => s.id !== id));
+    deleteConstructionSiteFromFirestore(id);
     playBeepSound('warning');
   }, [playBeepSound]);
 
@@ -1020,6 +1089,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       setToolCautions((prev) => [newCaution, ...prev]);
+      saveToolCautionToFirestore(newCaution);
       playBeepSound('success');
       return { success: true, caution: newCaution };
     },
@@ -1039,21 +1109,20 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const now = new Date().toISOString();
       const isDamagedOrLost = conditionOnReturn === 'AVARIADO' || conditionOnReturn === 'PERDIDO';
 
+      const updatedCaution: ToolCaution = {
+        ...caution,
+        status: isDamagedOrLost ? 'AVARIADA' : 'DEVOLVIDA',
+        conditionOnReturn,
+        returnedDate: now,
+        operatorReturn: operatorReturn || 'Almoxarife',
+        notes: notes ? `${caution.notes || ''} [Devolução]: ${notes}`.trim() : caution.notes,
+      };
+
       // Update caution record
       setToolCautions((prev) =>
-        prev.map((c) =>
-          c.id === cautionId
-            ? {
-                ...c,
-                status: isDamagedOrLost ? 'AVARIADA' : 'DEVOLVIDA',
-                conditionOnReturn,
-                returnedDate: now,
-                operatorReturn: operatorReturn || 'Almoxarife',
-                notes: notes ? `${c.notes || ''} [Devolução]: ${notes}`.trim() : c.notes,
-              }
-            : c
-        )
+        prev.map((c) => (c.id === cautionId ? updatedCaution : c))
       );
+      saveToolCautionToFirestore(updatedCaution);
 
       // If returned in good condition, add stock back (ENTRADA - DEVOLUCAO)
       if (conditionOnReturn === 'BOM' || conditionOnReturn === 'REGULAR') {
@@ -1116,11 +1185,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const deleteSupplier = useCallback((id: string) => {
     setSuppliers((prev) => prev.filter((s) => s.id !== id));
-    try {
-      deleteDoc(doc(db, 'suppliers', id));
-    } catch (e) {
-      console.warn('Delete supplier error:', e);
-    }
+    deleteSupplierFromFirestore(id);
     playBeepSound('warning');
   }, [playBeepSound]);
 
@@ -1153,11 +1218,7 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const deleteEmployee = useCallback((id: string) => {
     setEmployees((prev) => prev.filter((e) => e.id !== id));
-    try {
-      deleteDoc(doc(db, 'employees', id));
-    } catch (e) {
-      console.warn('Delete employee error:', e);
-    }
+    deleteEmployeeFromFirestore(id);
     playBeepSound('warning');
   }, [playBeepSound]);
 
@@ -1165,22 +1226,14 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const idSet = new Set(ids);
     setEmployees((prev) => prev.filter((e) => !idSet.has(e.id)));
     ids.forEach((id) => {
-      try {
-        deleteDoc(doc(db, 'employees', id));
-      } catch (e) {
-        console.warn('Delete employee bulk error:', e);
-      }
+      deleteEmployeeFromFirestore(id);
     });
     playBeepSound('warning');
   }, [playBeepSound]);
 
   const clearAllEmployees = useCallback(() => {
     employees.forEach((e) => {
-      try {
-        deleteDoc(doc(db, 'employees', e.id));
-      } catch (err) {
-        console.warn('Clear employee error:', err);
-      }
+      deleteEmployeeFromFirestore(e.id);
     });
     setEmployees([]);
     playBeepSound('warning');
@@ -1202,23 +1255,28 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       );
     }
     setToolCautions((prev) => prev.filter((c) => c.id !== id));
+    deleteToolCautionFromFirestore(id);
     playBeepSound('warning');
   }, [toolCautions, playBeepSound]);
 
   const clearFinishedCautions = useCallback(() => {
+    const finished = toolCautions.filter((c) => c.status !== 'EM_USO');
+    finished.forEach((c) => deleteToolCautionFromFirestore(c.id));
     setToolCautions((prev) => prev.filter((c) => c.status === 'EM_USO'));
     playBeepSound('warning');
-  }, [playBeepSound]);
+  }, [toolCautions, playBeepSound]);
 
   const clearAllCautions = useCallback(() => {
+    toolCautions.forEach((c) => deleteToolCautionFromFirestore(c.id));
     setToolCautions([]);
     playBeepSound('warning');
-  }, [playBeepSound]);
+  }, [toolCautions, playBeepSound]);
 
   const clearAllSites = useCallback(() => {
+    constructionSites.forEach((s) => deleteConstructionSiteFromFirestore(s.id));
     setConstructionSites([]);
     playBeepSound('warning');
-  }, [playBeepSound]);
+  }, [constructionSites, playBeepSound]);
 
   const deleteBackupRecord = useCallback((id: string) => {
     setBackupHistory((prev) => prev.filter((b) => b.id !== id));

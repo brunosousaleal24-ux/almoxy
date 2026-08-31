@@ -24,7 +24,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { Product, StockMovement, Supplier, AppSettings, Employee } from '../types';
+import { Product, StockMovement, Supplier, AppSettings, Employee, ConstructionSite, ToolCaution } from '../types';
 
 // Firebase configuration provided for contrupro-10f13
 export const firebaseConfig = {
@@ -126,13 +126,16 @@ export async function testFirestoreConnection(): Promise<{ connected: boolean; m
 export async function seedInitialFirestoreData(
   products: Product[],
   movements: StockMovement[],
-  suppliers: Supplier[]
+  suppliers: Supplier[],
+  employees?: Employee[],
+  constructionSites?: ConstructionSite[],
+  toolCautions?: ToolCaution[]
 ) {
   try {
     const prodCol = collection(db, 'products');
     const existingSnap = await getDocs(prodCol);
     if (existingSnap.empty && products.length > 0) {
-      console.log('Seeding initial products to Firestore...');
+      console.log('Seeding initial dataset to Firestore cloud...');
       const batch = writeBatch(db);
       products.forEach((p) => {
         const ref = doc(db, 'products', p.id);
@@ -146,8 +149,26 @@ export async function seedInitialFirestoreData(
         const ref = doc(db, 'movements', m.id);
         batch.set(ref, m);
       });
+      if (employees && employees.length > 0) {
+        employees.forEach((e) => {
+          const ref = doc(db, 'employees', e.id);
+          batch.set(ref, e);
+        });
+      }
+      if (constructionSites && constructionSites.length > 0) {
+        constructionSites.forEach((cs) => {
+          const ref = doc(db, 'constructionSites', cs.id);
+          batch.set(ref, cs);
+        });
+      }
+      if (toolCautions && toolCautions.length > 0) {
+        toolCautions.forEach((tc) => {
+          const ref = doc(db, 'toolCautions', tc.id);
+          batch.set(ref, tc);
+        });
+      }
       await batch.commit();
-      console.log('Firestore seed complete!');
+      console.log('Firestore seed complete for all collections!');
     }
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, 'seed_batch');
@@ -167,6 +188,16 @@ export async function saveProductToFirestore(product: Product) {
   }
 }
 
+// Delete product from Firestore
+export async function deleteProductFromFirestore(id: string) {
+  try {
+    const ref = doc(db, 'products', id);
+    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
+  }
+}
+
 // Save single movement to Firestore
 export async function saveMovementToFirestore(movement: StockMovement) {
   try {
@@ -180,6 +211,16 @@ export async function saveMovementToFirestore(movement: StockMovement) {
   }
 }
 
+// Delete movement from Firestore
+export async function deleteMovementFromFirestore(id: string) {
+  try {
+    const ref = doc(db, 'movements', id);
+    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `movements/${id}`);
+  }
+}
+
 // Save single supplier to Firestore
 export async function saveSupplierToFirestore(supplier: Supplier) {
   try {
@@ -187,6 +228,16 @@ export async function saveSupplierToFirestore(supplier: Supplier) {
     await setDoc(ref, supplier, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `suppliers/${supplier.id}`);
+  }
+}
+
+// Delete supplier from Firestore
+export async function deleteSupplierFromFirestore(id: string) {
+  try {
+    const ref = doc(db, 'suppliers', id);
+    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `suppliers/${id}`);
   }
 }
 
@@ -200,6 +251,62 @@ export async function saveEmployeeToFirestore(employee: Employee) {
     }, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `employees/${employee.id}`);
+  }
+}
+
+// Delete employee from Firestore
+export async function deleteEmployeeFromFirestore(id: string) {
+  try {
+    const ref = doc(db, 'employees', id);
+    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `employees/${id}`);
+  }
+}
+
+// Save single construction site to Firestore
+export async function saveConstructionSiteToFirestore(site: ConstructionSite) {
+  try {
+    const ref = doc(db, 'constructionSites', site.id);
+    await setDoc(ref, {
+      ...site,
+      _updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `constructionSites/${site.id}`);
+  }
+}
+
+// Delete construction site from Firestore
+export async function deleteConstructionSiteFromFirestore(id: string) {
+  try {
+    const ref = doc(db, 'constructionSites', id);
+    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `constructionSites/${id}`);
+  }
+}
+
+// Save single tool caution to Firestore
+export async function saveToolCautionToFirestore(caution: ToolCaution) {
+  try {
+    const ref = doc(db, 'toolCautions', caution.id);
+    await setDoc(ref, {
+      ...caution,
+      _updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `toolCautions/${caution.id}`);
+  }
+}
+
+// Delete tool caution from Firestore
+export async function deleteToolCautionFromFirestore(id: string) {
+  try {
+    const ref = doc(db, 'toolCautions', id);
+    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `toolCautions/${id}`);
   }
 }
 
