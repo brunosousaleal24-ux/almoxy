@@ -5,6 +5,7 @@ import {
   doc,
   setDoc,
   getDocs,
+  deleteDoc,
   onSnapshot,
   writeBatch,
   query,
@@ -192,7 +193,7 @@ export async function saveProductToFirestore(product: Product) {
 export async function deleteProductFromFirestore(id: string) {
   try {
     const ref = doc(db, 'products', id);
-    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
   }
@@ -215,7 +216,7 @@ export async function saveMovementToFirestore(movement: StockMovement) {
 export async function deleteMovementFromFirestore(id: string) {
   try {
     const ref = doc(db, 'movements', id);
-    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `movements/${id}`);
   }
@@ -235,7 +236,7 @@ export async function saveSupplierToFirestore(supplier: Supplier) {
 export async function deleteSupplierFromFirestore(id: string) {
   try {
     const ref = doc(db, 'suppliers', id);
-    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `suppliers/${id}`);
   }
@@ -258,7 +259,7 @@ export async function saveEmployeeToFirestore(employee: Employee) {
 export async function deleteEmployeeFromFirestore(id: string) {
   try {
     const ref = doc(db, 'employees', id);
-    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `employees/${id}`);
   }
@@ -281,7 +282,7 @@ export async function saveConstructionSiteToFirestore(site: ConstructionSite) {
 export async function deleteConstructionSiteFromFirestore(id: string) {
   try {
     const ref = doc(db, 'constructionSites', id);
-    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `constructionSites/${id}`);
   }
@@ -304,7 +305,7 @@ export async function saveToolCautionToFirestore(caution: ToolCaution) {
 export async function deleteToolCautionFromFirestore(id: string) {
   try {
     const ref = doc(db, 'toolCautions', id);
-    await setDoc(ref, { _deleted: true, _deletedAt: serverTimestamp() }, { merge: true });
+    await deleteDoc(ref);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `toolCautions/${id}`);
   }

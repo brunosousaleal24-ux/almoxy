@@ -427,102 +427,97 @@ export const InventoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     try {
       const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudProds: Product[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as any;
-            if (data.id && data.sku && !data._deleted) {
-              cloudProds.push(data as Product);
-            }
-          });
-          if (cloudProds.length > 0) {
-            setProducts(cloudProds);
+        const cloudProds: Product[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as any;
+          if (data.id && data.sku && !data._deleted) {
+            cloudProds.push(data as Product);
           }
+        });
+        if (!snapshot.empty || cloudProds.length > 0) {
+          setProducts(cloudProds);
+          localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(cloudProds));
         }
       }, (err) => {
         handleFirestoreError(err, OperationType.LIST, 'products');
       });
 
       const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudMovs: StockMovement[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as any;
-            if (data.id && data.productId && !data._deleted) {
-              cloudMovs.push(data as StockMovement);
-            }
-          });
-          if (cloudMovs.length > 0) {
-            setMovements(cloudMovs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        const cloudMovs: StockMovement[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as any;
+          if (data.id && data.productId && !data._deleted) {
+            cloudMovs.push(data as StockMovement);
           }
+        });
+        if (!snapshot.empty || cloudMovs.length > 0) {
+          const sorted = cloudMovs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setMovements(sorted);
+          localStorage.setItem(STORAGE_KEYS.MOVEMENTS, JSON.stringify(sorted));
         }
       }, (err) => {
         handleFirestoreError(err, OperationType.LIST, 'movements');
       });
 
       const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudEmps: Employee[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as any;
-            if (data.id && data.name && !data._deleted) {
-              cloudEmps.push(data as Employee);
-            }
-          });
-          if (cloudEmps.length > 0) {
-            setEmployees(cloudEmps);
+        const cloudEmps: Employee[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as any;
+          if (data.id && data.name && !data._deleted) {
+            cloudEmps.push(data as Employee);
           }
+        });
+        if (!snapshot.empty || cloudEmps.length > 0) {
+          setEmployees(cloudEmps);
+          localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(cloudEmps));
         }
       }, (err) => {
         handleFirestoreError(err, OperationType.LIST, 'employees');
       });
 
       const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudSups: Supplier[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as any;
-            if (data.id && data.name && !data._deleted) {
-              cloudSups.push(data as Supplier);
-            }
-          });
-          if (cloudSups.length > 0) {
-            setSuppliers(cloudSups);
+        const cloudSups: Supplier[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as any;
+          if (data.id && data.name && !data._deleted) {
+            cloudSups.push(data as Supplier);
           }
+        });
+        if (!snapshot.empty || cloudSups.length > 0) {
+          setSuppliers(cloudSups);
+          localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(cloudSups));
         }
       }, (err) => {
         handleFirestoreError(err, OperationType.LIST, 'suppliers');
       });
 
       const unsubSites = onSnapshot(collection(db, 'constructionSites'), (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudSites: ConstructionSite[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as any;
-            if (data.id && data.name && !data._deleted) {
-              cloudSites.push(data as ConstructionSite);
-            }
-          });
-          if (cloudSites.length > 0) {
-            setConstructionSites(cloudSites);
+        const cloudSites: ConstructionSite[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as any;
+          if (data.id && data.name && !data._deleted) {
+            cloudSites.push(data as ConstructionSite);
           }
+        });
+        if (!snapshot.empty || cloudSites.length > 0) {
+          setConstructionSites(cloudSites);
+          localStorage.setItem(STORAGE_KEYS.CONSTRUCTION_SITES, JSON.stringify(cloudSites));
         }
       }, (err) => {
         handleFirestoreError(err, OperationType.LIST, 'constructionSites');
       });
 
       const unsubCautions = onSnapshot(collection(db, 'toolCautions'), (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudCautions: ToolCaution[] = [];
-          snapshot.forEach((d) => {
-            const data = d.data() as any;
-            if (data.id && data.toolName && !data._deleted) {
-              cloudCautions.push(data as ToolCaution);
-            }
-          });
-          if (cloudCautions.length > 0) {
-            setToolCautions(cloudCautions);
+        const cloudCautions: ToolCaution[] = [];
+        snapshot.forEach((d) => {
+          const data = d.data() as any;
+          if (data.id && data.toolName && !data._deleted) {
+            cloudCautions.push(data as ToolCaution);
           }
+        });
+        if (!snapshot.empty || cloudCautions.length > 0) {
+          setToolCautions(cloudCautions);
+          localStorage.setItem(STORAGE_KEYS.TOOL_CAUTIONS, JSON.stringify(cloudCautions));
         }
       }, (err) => {
         handleFirestoreError(err, OperationType.LIST, 'toolCautions');
