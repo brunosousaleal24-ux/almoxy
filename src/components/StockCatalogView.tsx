@@ -59,13 +59,19 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
 
-  // Filter products
+  // Filter products in real time by name, SKU, category, barcode, shelf, etc.
   const filteredProducts = products.filter((p) => {
+    const term = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.barcode.includes(searchTerm) ||
-      p.location.shelf.toLowerCase().includes(searchTerm.toLowerCase());
+      !term ||
+      (p.name && p.name.toLowerCase().includes(term)) ||
+      (p.sku && p.sku.toLowerCase().includes(term)) ||
+      (p.category && p.category.toLowerCase().includes(term)) ||
+      (p.barcode && p.barcode.toLowerCase().includes(term)) ||
+      (p.description && p.description.toLowerCase().includes(term)) ||
+      (p.location?.shelf && p.location.shelf.toLowerCase().includes(term)) ||
+      (p.location?.warehouse && p.location.warehouse.toLowerCase().includes(term)) ||
+      (p.supplier && p.supplier.toLowerCase().includes(term));
 
     const matchesCat = selectedCategory === 'TODAS' || p.category === selectedCategory;
 
@@ -211,7 +217,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
       {/* Filter and Search Bar */}
       <div className="p-4 bg-white dark:bg-[#16191D] border border-slate-200/90 dark:border-[#262B33] rounded-2xl shadow-sm space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Search Input */}
+          {/* Real-time Search Input */}
           <div className="relative md:col-span-2">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -219,9 +225,25 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por SKU, EAN, Descrição ou Prateleira..."
-              className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60 font-sans"
+              placeholder="Buscar produtos por Nome, SKU ou Categoria..."
+              className="w-full pl-10 pr-24 py-2.5 text-xs sm:text-sm bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] placeholder-slate-400 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60 font-sans transition"
             />
+            {searchTerm && (
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                <span className="hidden sm:inline px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-md">
+                  {filteredProducts.length} {filteredProducts.length === 1 ? 'item' : 'itens'}
+                </span>
+                <button
+                  type="button"
+                  id="btn-clear-search-term"
+                  onClick={() => setSearchTerm('')}
+                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
+                  title="Limpar busca"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Status Filter */}
@@ -230,7 +252,7 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full py-2 px-3 text-xs bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60 font-sans cursor-pointer"
+              className="w-full py-2.5 px-3 text-xs bg-slate-50 dark:bg-[#1C2128] border border-slate-200 dark:border-[#2D3540] rounded-xl text-slate-900 dark:text-[#F3F4F6] focus:outline-none focus:border-amber-500/60 font-sans cursor-pointer"
             >
               <option value="ALL">Todos os Níveis de Estoque</option>
               <option value="CRITICO">🚨 Ruptura / Estoque Zerado (0)</option>
@@ -240,21 +262,39 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
           </div>
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
-          {CATEGORIES.map((cat) => (
+        {/* Category Filter Pills & Active Filter Status */}
+        <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap transition cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
+                    : 'bg-slate-100 dark:bg-[#1C2128] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#252B35] font-medium'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {(searchTerm || selectedCategory !== 'TODAS' || statusFilter !== 'ALL') && (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-lg text-xs whitespace-nowrap transition cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
-                  : 'bg-slate-100 dark:bg-[#1C2128] text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#252B35] font-medium'
-              }`}
+              type="button"
+              id="btn-reset-all-filters"
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCategory('TODAS');
+                setStatusFilter('ALL');
+              }}
+              className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 shrink-0 font-medium cursor-pointer"
             >
-              {cat}
+              <RotateCcw className="w-3 h-3" />
+              <span>Limpar filtros</span>
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -291,8 +331,36 @@ export const StockCatalogView: React.FC<StockCatalogViewProps> = ({
             <tbody className="divide-y divide-slate-100 dark:divide-[#21262E] text-xs">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
-                    Nenhum produto encontrado com os filtros selecionados.
+                  <td colSpan={9} className="py-14 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto space-y-2.5">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-[#1E232B] flex items-center justify-center text-slate-400">
+                        <Search className="w-5 h-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          Nenhum produto encontrado
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {searchTerm
+                            ? `Nenhum resultado corresponde à busca "${searchTerm}".`
+                            : 'Nenhum produto corresponde aos filtros selecionados.'}
+                        </p>
+                      </div>
+                      {(searchTerm || selectedCategory !== 'TODAS' || statusFilter !== 'ALL') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchTerm('');
+                            setSelectedCategory('TODAS');
+                            setStatusFilter('ALL');
+                          }}
+                          className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 mt-1"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Limpar busca e filtros</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
